@@ -559,7 +559,7 @@
   }
 
   function calcPips(entryLevel, type, atPrice){
-    var raw = type === 'support' ? (atPrice - entryLevel) : (entryLevel - atPrice);
+    var raw = type === 'support' ? (entryLevel - atPrice) : (atPrice - entryLevel); // disesuaikan dengan label yang dibalik
     return Math.round((raw / PIP_SIZE) * 10) / 10;
   }
 
