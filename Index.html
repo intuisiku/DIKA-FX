@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>XAUUSD Level Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d12;
+    --bg-panel: #10141b;
+    --bg-panel-raised: #151a23;
+    --line: #232a35;
+    --line-soft: #1a2029;
+    --gold: #c9a24a;
+    --gold-soft: rgba(201,162,74,0.35);
+    --text: #e8e6df;
+    --text-dim: #8b93a1;
+    --text-faint: #565f6d;
+    --blue: #3da5ff;
+    --blue-glow: rgba(61,165,255,0.55);
+    --red: #ff4d4d;
+    --red-glow: rgba(255,77,77,0.55);
+    --green: #4ade80;
+    --radius: 3px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(201,162,74,0.06), transparent 45%),
+      radial-gradient(circle at 85% 100%, rgba(61,165,255,0.05), transparent 45%);
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 18px 16px 40px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  header.top h1 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+  header.top .pair {
+    color: var(--gold);
+  }
+  header.top .status {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+  .dot.paused { background: var(--text-faint); box-shadow: none; }
+
+  /* price block */
+  .price-block {
+    padding: 22px 0 18px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .price-main {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: clamp(38px, 11vw, 54px);
+    line-height: 1;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .price-main .change {
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .change.up { color: var(--green); }
+  .change.down { color: var(--red); }
+  .price-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.6;
+  }
+  .price-sub b { color: var(--text); font-weight: 500; }
+
+  /* chart */
+  .chart-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 8px 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  canvas#chart {
+    width: 100%;
+    height: 230px;
+    display: block;
+  }
+  .chart-legend {
+    display: flex;
+    gap: 14px;
+    padding: 8px 8px 4px;
+    font-size: 10.5px;
+    color: var(--text-dim);
+  }
+  .chart-legend span { display: flex; align-items: center; gap: 5px; }
+  .swatch { width: 9px; height: 2px; display: inline-block; }
+  .swatch.gold { background: var(--gold); }
+  .swatch.res { background: var(--red); }
+  .swatch.sup { background: var(--blue); }
+
+  /* active alerts overlay */
+  .alerts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .alert-card {
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid;
+    position: relative;
+    overflow: hidden;
+  }
+  .alert-card .info { display: flex; flex-direction: column; gap: 2px; }
+  .alert-card .label {
+    font-size: 10.5px;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+  }
+  .alert-card .level {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 19px;
+    font-weight: 600;
+  }
+  .alert-card .timer {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 34px;
+    text-align: right;
+  }
+  .alert-card .bar {
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 2px;
+    background: currentColor;
+    opacity: 0.8;
+  }
+
+  .alert-card.support {
+    background: rgba(61,165,255,0.10);
+    border-color: rgba(61,165,255,0.4);
+    color: var(--blue);
+    animation: blinkBlue 1s ease-in-out infinite;
+  }
+  .alert-card.resistance {
+    background: rgba(255,77,77,0.10);
+    border-color: rgba(255,77,77,0.4);
+    color: var(--red);
+    animation: blinkRed 0.5s ease-in-out infinite;
+  }
+  @keyframes blinkBlue {
+    0%, 100% { background: rgba(61,165,255,0.10); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    50% { background: rgba(61,165,255,0.32); box-shadow: 0 0 18px var(--blue-glow); }
+  }
+  @keyframes blinkRed {
+    0%, 100% { background: rgba(255,77,77,0.10); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    50% { background: rgba(255,77,77,0.38); box-shadow: 0 0 18px var(--red-glow); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .alert-card.support, .alert-card.resistance { animation: none; }
+  }
+
+  .empty-alerts {
+    font-size: 12px;
+    color: var(--text-faint);
+    padding: 14px 2px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    text-align: center;
+  }
+
+  /* controls */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--bg-panel-raised);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  button:hover { border-color: var(--gold-soft); color: var(--gold); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button.primary { border-color: var(--gold-soft); color: var(--gold); }
+  .speed-group {
+    display: flex; gap: 4px; margin-left: auto;
+    font-size: 11px; color: var(--text-dim);
+    align-items: center;
+  }
+  select {
+    background: var(--bg-panel-raised);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 7px 8px;
+  }
+
+  /* log */
+  .log-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 28px;
+    margin-bottom: 8px;
+  }
+  .log-head h2 {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--text-dim);
+    margin: 0;
+  }
+  .log-head button {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+  .log {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .log-row {
+    display: grid;
+    grid-template-columns: 62px 1fr 74px 56px;
+    gap: 8px;
+    padding: 9px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--line-soft);
+    align-items: center;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-row .t { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .log-row .lvl { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+  .log-row .kind { font-size: 10.5px; color: var(--text-dim); }
+  .log-row .tag {
+    font-size: 9.5px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    justify-self: end;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  .tag.sup { color: var(--blue); background: rgba(61,165,255,0.12); }
+  .tag.res { color: var(--red); background: rgba(255,77,77,0.12); }
+  .log-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  footer.note {
+    margin-top: 24px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-faint);
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+  footer.note b { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1><span class="pair">XAU/USD</span> — Level Watch</h1>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">berjalan</span></div>
+  </header>
+
+  <div class="price-block">
+    <div class="price-main">
+      <span id="priceMain">0.00</span>
+      <span class="change mono" id="priceChange">+0.00</span>
+    </div>
+    <div class="price-sub">
+      Support terdekat <b id="nearSupport">–</b><br>
+      Resistance terdekat <b id="nearResistance">–</b>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <canvas id="chart"></canvas>
+    <div class="chart-legend">
+      <span><i class="swatch gold"></i> level kelipatan 5 (…x5)</span>
+      <span><i class="swatch sup"></i> tersentuh dari atas (support)</span>
+      <span><i class="swatch res"></i> tersentuh dari bawah (resistance)</span>
+    </div>
+  </div>
+
+  <div class="alerts" id="alerts">
+    <div class="empty-alerts">Belum ada sinyal aktif — menunggu harga menyentuh level x5</div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="toggleBtn">Jeda</button>
+    <button id="resetBtn">Reset</button>
+    <div class="speed-group">
+      <label for="speedSelect">refresh</label>
+      <select id="speedSelect">
+        <option value="10000" selected>10 detik</option>
+        <option value="5000">5 detik</option>
+        <option value="20000">20 detik</option>
+        <option value="30000">30 detik</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="log-head">
+    <h2>RIWAYAT SINYAL</h2>
+    <button id="clearLogBtn">Bersihkan</button>
+  </div>
+  <div class="log" id="log">
+    <div class="log-empty">Sinyal yang terpicu akan muncul di sini</div>
+  </div>
+
+  <footer class="note">
+    <b>Tentang alat ini.</b> Harga diambil langsung dari <b>gold-api.com</b> (API publik gratis, tanpa API key) setiap beberapa detik — ini harga emas spot (XAU/USD) yang berlaku sebagai acuan XAUUSD. Karena ini file yang dijalankan sendiri di browser Anda (bukan halaman yang di-hosting Claude), permintaan datanya tidak diblokir. Aturan sinyal: setiap level yang berakhiran angka 5 (kelipatan ganjil dari 5, mis. …4335, 4345, 4355) dipantau terus. Saat harga <b>turun menyentuh</b> level tersebut, kotak biru berkedip selama <b>10 detik</b> (zona support/beli). Saat harga <b>naik menyentuh</b> level tersebut, kotak merah berkedip selama <b>10 detik</b> (zona resistance/jual). Data ini bisa saja sedikit berbeda dari harga broker Anda dan tidak dijamin selalu tersedia (bergantung layanan pihak ketiga). Ini bukan nasihat trading.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- state ----------
+  var price = null;
+  var prevPrice = null;
+  var history = [];
+  var running = true;
+  var tickMs = 10000;
+  var timer = null;
+  var API_URL = 'https://api.gold-api.com/price/XAU'; // gratis, tanpa API key
+  var activeAlerts = {}; // level -> {type, expiresAt, duration, startedAt, el}
+  var logEntries = []; // newest first
+  var maxHistory = 140;
+
+  var elPrice = document.getElementById('priceMain');
+  var elChange = document.getElementById('priceChange');
+  var elNearSup = document.getElementById('nearSupport');
+  var elNearRes = document.getElementById('nearResistance');
+  var elAlerts = document.getElementById('alerts');
+  var elLog = document.getElementById('log');
+  var elToggle = document.getElementById('toggleBtn');
+  var elReset = document.getElementById('resetBtn');
+  var elSpeed = document.getElementById('speedSelect');
+  var elClearLog = document.getElementById('clearLogBtn');
+  var elStatusDot = document.getElementById('statusDot');
+  var elStatusText = document.getElementById('statusText');
+  var canvas = document.getElementById('chart');
+  var ctx = canvas.getContext('2d');
+
+  function fmt(n){ return n.toFixed(2); }
+
+  function isSignalLevel(l){
+    // odd multiple of 5 == ends in 5 (mod 10 === 5)
+    var m = Math.round(l) % 10;
+    if (m < 0) m += 10;
+    return m === 5;
+  }
+
+  function nextLevelsAround(p){
+    var base = Math.floor(p / 10) * 10;
+    return { below: base + 5 <= p ? base + 5 : base - 5, above: base + 5 > p ? base + 5 : base + 15 };
+  }
+
+  function step(){
+    fetch(API_URL, { cache: 'no-store' })
+      .then(function(res){
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        var newPrice = Math.round(Number(data.price) * 100) / 100;
+        if (!isFinite(newPrice)) throw new Error('harga tidak valid');
+        setStatus(true, 'live');
+        if (price === null) {
+          price = newPrice;
+          prevPrice = newPrice;
+          history.push(newPrice);
+          render();
+          return;
+        }
+        prevPrice = price;
+        price = newPrice;
+        history.push(price);
+        if (history.length > maxHistory) history.shift();
+        checkCrossings(prevPrice, price);
+        render();
+      })
+      .catch(function(err){
+        setStatus(false, 'gagal memuat (' + err.message + ') — coba lagi');
+      });
+  }
+
+  function setStatus(ok, text){
+    elStatusText.textContent = text;
+    elStatusDot.classList.toggle('paused', !ok);
+  }
+
+  function checkCrossings(prev, cur){
+    if (prev === cur) return;
+    var lo = Math.min(prev, cur), hi = Math.max(prev, cur);
+    // find all x5 levels within (lo, hi]
+    var start = Math.ceil((lo - 5) / 10) * 10 + 5;
+    for (var lvl = start; lvl <= hi + 0.0001; lvl += 10) {
+      if (lvl < lo - 0.0001) continue;
+      if (lvl > hi + 0.0001) continue;
+      if (!isSignalLevel(lvl)) continue;
+      var risingThrough = cur > prev; // price moved UP into this level -> resistance touch
+      triggerSignal(lvl, risingThrough ? 'resistance' : 'support');
+    }
+  }
+
+  function triggerSignal(level, type){
+    var key = level.toFixed(0);
+    var now = Date.now();
+    var existing = activeAlerts[key];
+    // cooldown: don't re-trigger same level+type within its active window
+    if (existing && existing.type === type && existing.expiresAt > now) return;
+
+    var duration = 10000;
+    activeAlerts[key] = {
+      level: level, type: type, startedAt: now, expiresAt: now + duration, duration: duration
+    };
+    addLogEntry(level, type);
+    renderAlerts();
+  }
+
+  function addLogEntry(level, type){
+    logEntries.unshift({
+      time: new Date(),
+      level: level,
+      type: type
+    });
+    if (logEntries.length > 60) logEntries.pop();
+    renderLog();
+  }
+
+  function renderAlerts(){
+    var now = Date.now();
+    var keys = Object.keys(activeAlerts);
+    // purge expired
+    keys.forEach(function(k){
+      if (activeAlerts[k].expiresAt <= now) delete activeAlerts[k];
+    });
+    keys = Object.keys(activeAlerts).sort(function(a,b){ return activeAlerts[b].startedAt - activeAlerts[a].startedAt; });
+
+    if (keys.length === 0) {
+      elAlerts.innerHTML = '<div class="empty-alerts">Belum ada sinyal aktif — menunggu harga menyentuh level x5</div>';
+      return;
+    }
+
+    var html = keys.map(function(k){
+      var a = activeAlerts[k];
+      var remain = Math.max(0, a.expiresAt - now);
+      var remainLabel = remain >= 1000 ? Math.ceil(remain/1000) + 's' : Math.ceil(remain/100)/10 + 's';
+      var pct = Math.max(0, remain / a.duration) * 100;
+      var isSup = a.type === 'support';
+      return (
+        '<div class="alert-card ' + (isSup ? 'support' : 'resistance') + '">' +
+          '<div class="info">' +
+            '<span class="label">' + (isSup ? 'SUPPORT TERSENTUH · zona beli' : 'RESISTANCE TERSENTUH · zona jual') + '</span>' +
+            '<span class="level mono">' + a.level.toFixed(0) + '.00</span>' +
+          '</div>' +
+          '<span class="timer">' + remainLabel + '</span>' +
+          '<div class="bar" style="width:' + pct + '%"></div>' +
+        '</div>'
+      );
+    }).join('');
+    elAlerts.innerHTML = html;
+  }
+
+  function renderLog(){
+    if (logEntries.length === 0) {
+      elLog.innerHTML = '<div class="log-empty">Sinyal yang terpicu akan muncul di sini</div>';
+      return;
+    }
+    var html = logEntries.slice(0, 30).map(function(e){
+      var hh = e.time.getHours().toString().padStart(2,'0');
+      var mm = e.time.getMinutes().toString().padStart(2,'0');
+      var ss = e.time.getSeconds().toString().padStart(2,'0');
+      var isSup = e.type === 'support';
+      return (
+        '<div class="log-row">' +
+          '<span class="t">' + hh + ':' + mm + ':' + ss + '</span>' +
+          '<span class="kind">' + (isSup ? 'Sentuh support (turun)' : 'Sentuh resistance (naik)') + '</span>' +
+          '<span class="lvl mono">' + e.level.toFixed(0) + '.00</span>' +
+          '<span class="tag ' + (isSup ? 'sup' : 'res') + '">10 DETIK</span>' +
+        '</div>'
+      );
+    }).join('');
+    elLog.innerHTML = html;
+  }
+
+  function render(){
+    var change = price - (history.length > 1 ? history[0] : price);
+    elPrice.textContent = fmt(price);
+    elChange.textContent = (change >= 0 ? '+' : '') + fmt(change);
+    elChange.className = 'change mono ' + (change >= 0 ? 'up' : 'down');
+
+    var levels = nextLevelsAround(price);
+    elNearSup.textContent = Math.min(levels.below, levels.above).toFixed(0) < price ? levels.below.toFixed(0) : levels.below.toFixed(0);
+    elNearSup.textContent = levels.below.toFixed(0);
+    elNearRes.textContent = levels.above.toFixed(0);
+
+    renderAlerts();
+    drawChart();
+  }
+
+  function drawChart(){
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    var dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.floor(w*dpr) || canvas.height !== Math.floor(h*dpr)) {
+      canvas.width = Math.floor(w*dpr);
+      canvas.height = Math.floor(h*dpr);
+    }
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    if (history.length < 2) return;
+
+    var min = Math.min.apply(null, history);
+    var max = Math.max.apply(null, history);
+    var pad = Math.max(2, (max - min) * 0.15);
+    min -= pad; max += pad;
+    var range = max - min || 1;
+
+    var leftPad = 46, rightPad = 8, topPad = 8, botPad = 8;
+    var plotW = w - leftPad - rightPad;
+    var plotH = h - topPad - botPad;
+
+    function xFor(i){ return leftPad + (i/(maxHistory-1)) * plotW; }
+    function yFor(p){ return topPad + (1 - (p - min)/range) * plotH; }
+
+    // horizontal x5 level lines within range
+    var startLvl = Math.ceil((min-5)/10)*10 + 5;
+    ctx.font = '10px IBM Plex Mono, monospace';
+    for (var lvl = startLvl; lvl <= max; lvl += 10) {
+      if (!isSignalLevel(lvl)) continue;
+      var y = yFor(lvl);
+      ctx.strokeStyle = 'rgba(201,162,74,0.28)';
+      ctx.setLineDash([3,4]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(leftPad, y);
+      ctx.lineTo(w - rightPad, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(201,162,74,0.65)';
+      ctx.fillText(lvl.toFixed(0), 4, y+3);
+    }
+
+    // price line
+    var offset = maxHistory - history.length;
+    ctx.beginPath();
+    for (var i=0;i<history.length;i++){
+      var x = xFor(i+offset), y = yFor(history[i]);
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle = '#e8e6df';
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // fill under line
+    var lastX = xFor(history.length-1+offset);
+    ctx.lineTo(lastX, topPad+plotH);
+    ctx.lineTo(xFor(offset), topPad+plotH);
+    ctx.closePath();
+    var grad = ctx.createLinearGradient(0,topPad,0,topPad+plotH);
+    grad.addColorStop(0, 'rgba(201,162,74,0.18)');
+    grad.addColorStop(1, 'rgba(201,162,74,0.0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // current price dot
+    var cx = xFor(history.length-1+offset), cy = yFor(price);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.2, 0, Math.PI*2);
+    ctx.fillStyle = '#c9a24a';
+    ctx.fill();
+  }
+
+  // ---------- loop ----------
+  function scheduleNext(){
+    if (!running) return;
+    timer = setTimeout(function(){ step(); scheduleNext(); }, tickMs);
+  }
+  function scheduleAlertRefresh(){
+    setInterval(function(){ renderAlerts(); }, 250);
+  }
+
+  function start(){
+    running = true;
+    elToggle.textContent = 'Jeda';
+    step();
+    scheduleNext();
+  }
+  function pause(){
+    running = false;
+    elToggle.textContent = 'Lanjutkan';
+    setStatus(false, 'dijeda');
+    clearTimeout(timer);
+  }
+
+  elToggle.addEventListener('click', function(){
+    if (running) pause(); else start();
+  });
+  elReset.addEventListener('click', function(){
+    price = null;
+    prevPrice = null;
+    history = [];
+    activeAlerts = {};
+    logEntries = [];
+    renderLog();
+    renderAlerts();
+    step();
+  });
+  elSpeed.addEventListener('change', function(){
+    tickMs = parseInt(elSpeed.value, 10);
+  });
+  elClearLog.addEventListener('click', function(){
+    logEntries = [];
+    renderLog();
+  });
+
+  window.addEventListener('resize', drawChart);
+
+  setStatus(true, 'menghubungkan…');
+  renderLog();
+  start();
+  scheduleAlertRefresh();
+})();
+</script>
+</body>
+</html>
