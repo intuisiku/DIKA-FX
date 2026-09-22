@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>XAUUSD Level Watch</title>
+<title>XAUUSD DIKA FX</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -164,6 +164,20 @@
     min-width: 34px;
     text-align: right;
   }
+  .alert-card .metrics {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+  .alert-card .pips {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .alert-card .pips.pos { color: var(--green); }
+  .alert-card .pips.neg { color: var(--red); }
+  .alert-card .pips.flat { color: var(--text-dim); }
   .alert-card .bar {
     position: absolute;
     left: 0; bottom: 0;
@@ -268,23 +282,35 @@
     overflow: hidden;
   }
   .log-row {
-    display: grid;
-    grid-template-columns: 62px 1fr 74px 56px;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
     padding: 9px 12px;
     font-size: 12px;
     border-bottom: 1px solid var(--line-soft);
+  }
+  .log-row .line1, .log-row .line2 {
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
   .log-row:last-child { border-bottom: none; }
   .log-row .t { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
-  .log-row .lvl { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+  .log-row .lvl { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; }
   .log-row .kind { font-size: 10.5px; color: var(--text-dim); }
+  .log-row .pips {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .log-row .pips.pos { color: var(--green); }
+  .log-row .pips.neg { color: var(--red); }
+  .log-row .pips.flat { color: var(--text-faint); }
   .log-row .tag {
     font-size: 9.5px;
     padding: 2px 6px;
     border-radius: 2px;
-    justify-self: end;
     font-weight: 600;
     letter-spacing: 0.2px;
   }
@@ -312,7 +338,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1><span class="pair">XAU/USD</span> — Level Watch</h1>
+    <h1><span class="pair">XAU/USD</span> — DIKA FX</h1>
     <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">berjalan</span></div>
   </header>
 
@@ -397,6 +423,9 @@
   var activeAlerts = {}; // level -> {type, expiresAt, duration, startedAt, el}
   var logEntries = []; // newest first
   var maxHistory = 140;
+  var armed = true; // harus menyentuh level genap (…10,20,30,40) dulu sebelum sinyal baru boleh muncul
+  var PIP_SIZE = 0.1; // 1 pip = pergerakan harga 0.1 (konvensi umum XAU/USD di banyak broker)
+  var signalCounter = 0;
 
   var elPrice = document.getElementById('priceMain');
   var elChange = document.getElementById('priceChange');
@@ -416,6 +445,13 @@
     var m = Math.round(l) % 10;
     if (m < 0) m += 10;
     return m === 5;
+  }
+
+  function isResetLevel(l){
+    // kelipatan genap dari 10 (…10, 20, 30, 40 dst — berakhiran 0)
+    var m = Math.round(l) % 10;
+    if (m < 0) m += 10;
+    return m === 0;
   }
 
   function step(){
@@ -454,38 +490,62 @@
 
   function checkCrossings(prev, cur){
     if (prev === cur) return;
+    var up = cur > prev;
     var lo = Math.min(prev, cur), hi = Math.max(prev, cur);
-    // find all x5 levels within (lo, hi]
-    var start = Math.ceil((lo - 5) / 10) * 10 + 5;
-    for (var lvl = start; lvl <= hi + 0.0001; lvl += 10) {
+    // semua level kelipatan 5 (baik x5 maupun x0) yang terlewati
+    var start = Math.ceil(lo / 5) * 5;
+    var levels = [];
+    for (var lvl = start; lvl <= hi + 0.0001; lvl += 5) {
       if (lvl < lo - 0.0001) continue;
-      if (lvl > hi + 0.0001) continue;
-      if (!isSignalLevel(lvl)) continue;
-      var risingThrough = cur > prev; // price moved UP into this level -> resistance touch
-      triggerSignal(lvl, risingThrough ? 'resistance' : 'support');
+      levels.push(Math.round(lvl * 100) / 100);
+    }
+    if (!up) levels.reverse(); // urutkan sesuai arah harga benar-benar menyentuhnya
+
+    for (var i = 0; i < levels.length; i++) {
+      var l = levels[i];
+      if (isResetLevel(l)) {
+        armed = true; // harga sudah menyentuh level genap -> siap untuk sinyal berikutnya
+      } else if (isSignalLevel(l) && armed) {
+        triggerSignal(l, up ? 'resistance' : 'support');
+        armed = false; // kunci sampai menyentuh level genap lagi
+      }
     }
   }
 
-  function triggerSignal(level, type){
-    var key = level.toFixed(0);
-    var now = Date.now();
-    var existing = activeAlerts[key];
-    // cooldown: don't re-trigger same level+type within its active window
-    if (existing && existing.type === type && existing.expiresAt > now) return;
+  function calcPips(entryLevel, type, atPrice){
+    var raw = type === 'support' ? (atPrice - entryLevel) : (entryLevel - atPrice);
+    return Math.round((raw / PIP_SIZE) * 10) / 10;
+  }
 
+  function pipsClass(v){
+    if (v > 0) return 'pos';
+    if (v < 0) return 'neg';
+    return 'flat';
+  }
+
+  function pipsLabel(v){
+    return (v > 0 ? '+' : '') + v.toFixed(1) + ' pip';
+  }
+
+  function triggerSignal(level, type){
+    var now = Date.now();
     var duration = 10000;
-    activeAlerts[key] = {
-      level: level, type: type, startedAt: now, expiresAt: now + duration, duration: duration
+    signalCounter++;
+    var id = signalCounter;
+    activeAlerts[level.toFixed(0)] = {
+      id: id, level: level, type: type, startedAt: now, expiresAt: now + duration, duration: duration
     };
-    addLogEntry(level, type);
+    addLogEntry(id, level, type);
     renderAlerts();
   }
 
-  function addLogEntry(level, type){
+  function addLogEntry(id, level, type){
     logEntries.unshift({
+      id: id,
       time: new Date(),
       level: level,
-      type: type
+      type: type,
+      pips: null // diisi saat sinyal berakhir (10 detik selesai)
     });
     if (logEntries.length > 60) logEntries.pop();
     renderLog();
@@ -494,11 +554,21 @@
   function renderAlerts(){
     var now = Date.now();
     var keys = Object.keys(activeAlerts);
-    // purge expired
+    var logChanged = false;
+    // purge expired -> catat hasil pips final ke riwayat sebelum dihapus
     keys.forEach(function(k){
-      if (activeAlerts[k].expiresAt <= now) delete activeAlerts[k];
+      var a = activeAlerts[k];
+      if (a.expiresAt <= now) {
+        var finalPips = price !== null ? calcPips(a.level, a.type, price) : 0;
+        for (var i = 0; i < logEntries.length; i++) {
+          if (logEntries[i].id === a.id) { logEntries[i].pips = finalPips; logChanged = true; break; }
+        }
+        delete activeAlerts[k];
+      }
     });
     keys = Object.keys(activeAlerts).sort(function(a,b){ return activeAlerts[b].startedAt - activeAlerts[a].startedAt; });
+
+    if (logChanged) renderLog();
 
     if (keys.length === 0) {
       elAlerts.innerHTML = '<div class="empty-alerts">Belum ada sinyal aktif — menunggu harga menyentuh level x5</div>';
@@ -511,13 +581,17 @@
       var remainLabel = remain >= 1000 ? Math.ceil(remain/1000) + 's' : Math.ceil(remain/100)/10 + 's';
       var pct = Math.max(0, remain / a.duration) * 100;
       var isSup = a.type === 'support';
+      var livePips = price !== null ? calcPips(a.level, a.type, price) : 0;
       return (
         '<div class="alert-card ' + (isSup ? 'support' : 'resistance') + '">' +
           '<div class="info">' +
             '<span class="label">' + (isSup ? 'BUY NOW' : 'SELL NOW') + '</span>' +
             '<span class="level mono">' + a.level.toFixed(0) + '.00</span>' +
           '</div>' +
-          '<span class="timer">' + remainLabel + '</span>' +
+          '<div class="metrics">' +
+            '<span class="timer">' + remainLabel + '</span>' +
+            '<span class="pips ' + pipsClass(livePips) + '">' + pipsLabel(livePips) + '</span>' +
+          '</div>' +
           '<div class="bar" style="width:' + pct + '%"></div>' +
         '</div>'
       );
@@ -535,17 +609,25 @@
       var mm = e.time.getMinutes().toString().padStart(2,'0');
       var ss = e.time.getSeconds().toString().padStart(2,'0');
       var isSup = e.type === 'support';
+      var pipsHtml = e.pips === null
+        ? '<span class="pips flat">berjalan…</span>'
+        : '<span class="pips ' + pipsClass(e.pips) + '">' + pipsLabel(e.pips) + '</span>';
       return (
         '<div class="log-row">' +
-          '<span class="t">' + hh + ':' + mm + ':' + ss + '</span>' +
-          '<span class="kind">' + (isSup ? 'BUY NOW' : 'SELL NOW') + '</span>' +
-          '<span class="lvl mono">' + e.level.toFixed(0) + '.00</span>' +
-          '<span class="tag ' + (isSup ? 'sup' : 'res') + '">10 DETIK</span>' +
+          '<div class="line1">' +
+            '<span class="t">' + hh + ':' + mm + ':' + ss + ' · ' + (isSup ? 'BUY NOW' : 'SELL NOW') + '</span>' +
+            '<span class="tag ' + (isSup ? 'sup' : 'res') + '">10 DETIK</span>' +
+          '</div>' +
+          '<div class="line2">' +
+            '<span class="lvl mono">' + e.level.toFixed(0) + '.00</span>' +
+            pipsHtml +
+          '</div>' +
         '</div>'
       );
     }).join('');
     elLog.innerHTML = html;
   }
+
 
   function render(){
     var change = price - (history.length > 1 ? history[0] : price);
@@ -587,6 +669,7 @@
     history = [];
     activeAlerts = {};
     logEntries = [];
+    armed = true;
     renderLog();
     renderAlerts();
     step();
