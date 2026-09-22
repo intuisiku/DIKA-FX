@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -67,7 +66,9 @@
     margin: 0;
     letter-spacing: 0.2px;
   }
-  header.top .pair { color: var(--gold); }
+  header.top .pair {
+    color: var(--gold);
+  }
   header.top .status {
     font-size: 11px;
     color: var(--text-dim);
@@ -107,102 +108,84 @@
   }
   .change.up { color: var(--green); }
   .change.down { color: var(--red); }
+  .price-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.6;
+  }
+  .price-sub b { color: var(--text); font-weight: 500; }
 
-  /* chart */
-  .chart-card {
-    position: relative;
-    padding: 0;
+  /* lampu indikator */
+  .lamp-card {
     background: var(--bg-panel);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    overflow: hidden;
-    height: 320px;
-    touch-action: none;
-  }
-  #priceChart {
-    display: block;
-    width: 100%;
-    height: 100%;
-    cursor: crosshair;
-  }
-  .chart-meta {
-    position: absolute;
-    top: 8px;
-    left: 10px;
-    right: 10px;
+    padding: 26px 16px 22px;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    gap: clamp(22px, 8vw, 48px);
+  }
+  .lamp {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .lamp .bulb {
+    width: clamp(52px, 14vw, 68px);
+    height: clamp(52px, 14vw, 68px);
+    border-radius: 50%;
+    background: #171b22;
+    border: 2px solid var(--line);
+    box-shadow: inset 0 3px 8px rgba(0,0,0,0.5);
+    transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  .lamp .lbl {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 10.5px;
+    letter-spacing: 0.5px;
     color: var(--text-faint);
-    pointer-events: none;
-    letter-spacing: 0.3px;
+    transition: color 0.25s ease;
   }
-  .chart-hint {
-    position: absolute;
-    bottom: 8px;
-    left: 10px;
-    font-size: 10px;
-    color: var(--text-faint);
-    font-family: 'IBM Plex Mono', monospace;
-    z-index: 6;
-    pointer-events: none;
-    opacity: 0.7;
+  .lamp.on.sell .bulb {
+    background: radial-gradient(circle at 35% 30%, #ff8a8a, var(--red) 55%, #8a1f1f 100%);
+    border-color: var(--red);
+    box-shadow: 0 0 16px 4px var(--red-glow), 0 0 46px 14px rgba(255,77,77,0.35), inset 0 2px 6px rgba(255,255,255,0.35);
+    animation: lampPulseRed 0.6s ease-in-out infinite;
   }
-  .chart-controls {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    display: flex;
-    gap: 6px;
-    z-index: 6;
+  .lamp.on.sell .lbl { color: var(--red); }
+  .lamp.on.buy .bulb {
+    background: radial-gradient(circle at 35% 30%, #a7d4ff, var(--blue) 55%, #124a82 100%);
+    border-color: var(--blue);
+    box-shadow: 0 0 16px 4px var(--blue-glow), 0 0 46px 14px rgba(61,165,255,0.35), inset 0 2px 6px rgba(255,255,255,0.35);
+    animation: lampPulseBlue 1.1s ease-in-out infinite;
   }
-  .chart-controls button {
-    padding: 4px 8px;
-    font-size: 11px;
-    font-family: 'IBM Plex Mono', monospace;
-    background: rgba(16,20,27,0.9);
-    border: 1px solid var(--line);
-    color: var(--text-dim);
-    border-radius: var(--radius);
-    cursor: pointer;
-    line-height: 1.2;
+  .lamp.on.buy .lbl { color: var(--blue); }
+  .lamp.on.idle .bulb {
+    background: radial-gradient(circle at 35% 30%, #f3dfa0, var(--gold) 55%, #6b501c 100%);
+    border-color: var(--gold);
+    box-shadow: 0 0 12px 3px var(--gold-soft);
+    animation: lampBreathe 2.4s ease-in-out infinite;
   }
-  .chart-controls button:hover { color: var(--gold); border-color: var(--gold-soft); }
-  .chart-controls button.on { color: var(--gold); border-color: var(--gold-soft); }
+  .lamp.on.idle .lbl { color: var(--gold); }
+  @keyframes lampPulseRed {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.35); }
+  }
+  @keyframes lampPulseBlue {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.3); }
+  }
+  @keyframes lampBreathe {
+    0%, 100% { filter: brightness(0.85); }
+    50% { filter: brightness(1.15); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lamp.on .bulb { animation: none; }
+  }
 
-  .chart-tooltip {
-    position: absolute;
-    pointer-events: none;
-    background: rgba(10,13,18,0.94);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 6px 9px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--text);
-    white-space: nowrap;
-    transform: translate(-50%, -130%);
-    opacity: 0;
-    transition: opacity 0.12s ease;
-    z-index: 5;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
-  }
-  .chart-tooltip.show { opacity: 1; }
-  .chart-tooltip .tt-price { font-weight: 600; }
-  .chart-tooltip .tt-time { color: var(--text-dim); font-size: 10px; }
-  .chart-tooltip .tt-tag {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 5px;
-    border-radius: 2px;
-    font-size: 9px;
-    font-weight: 600;
-  }
-  .chart-tooltip .tt-tag.sup { color: var(--blue); background: rgba(61,165,255,0.15); }
-  .chart-tooltip .tt-tag.res { color: var(--red);  background: rgba(255,77,77,0.15); }
-
-  /* active alerts */
+  /* active alerts overlay */
   .alerts {
     display: flex;
     flex-direction: column;
@@ -372,6 +355,7 @@
   .log-row:last-child { border-bottom: none; }
   .log-row .t { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
   .log-row .lvl { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; }
+  .log-row .kind { font-size: 10.5px; color: var(--text-dim); }
   .log-row .pips {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 12.5px;
@@ -422,22 +406,18 @@
     </div>
   </div>
 
-  <div class="chart-card" id="chartCard">
-    <canvas id="priceChart"></canvas>
-    <div class="chart-meta">
-      <span id="chartRange">—</span>
-      <span id="chartCount">0 titik</span>
+  <div class="lamp-card">
+    <div class="lamp sell" id="lampSell">
+      <div class="bulb"></div>
+      <span class="lbl">SELL</span>
     </div>
-    <div class="chart-hint" id="chartHint">scroll = zoom · drag = geser</div>
-    <div class="chart-controls">
-      <button id="zoomIn"  title="Zoom in (tekan +)">+</button>
-      <button id="zoomOut" title="Zoom out (tekan −)">−</button>
-      <button id="zoomReset" title="Reset zoom (tekan 0)">⟲</button>
-      <button id="toggleLevels" class="on" title="Tampilkan level sinyal (tekan S)">S</button>
+    <div class="lamp idle on" id="lampIdle">
+      <div class="bulb"></div>
+      <span class="lbl">NETRAL</span>
     </div>
-    <div class="chart-tooltip" id="chartTooltip">
-      <div><span class="tt-price">0.00</span><span class="tt-tag" id="ttTag" style="display:none"></span></div>
-      <div class="tt-time" id="ttTime">—</div>
+    <div class="lamp buy" id="lampBuy">
+      <div class="bulb"></div>
+      <span class="lbl">BUY</span>
     </div>
   </div>
 
@@ -468,10 +448,6 @@
     <div class="log-empty">Sinyal yang terpicu akan muncul di sini</div>
   </div>
 
-  <footer class="note">
-    <b>Catatan:</b> Harga, chart, dan sinyal di halaman ini diambil dari satu sumber yang sama
-    (<span class="mono">api.gold-api.com</span>) sehingga selalu sinkron. Bukan saran keuangan.
-  </footer>
 
 </div>
 
@@ -482,38 +458,25 @@
   // ---------- state ----------
   var price = null;
   var prevPrice = null;
-  var history = [];            // array of { p: number, t: timestamp }
+  var history = [];
   var running = true;
   var tickMs = 1000;
   var timer = null;
-  var API_URL = 'https://api.gold-api.com/price/XAU';
-  var activeAlerts = {};       // level -> { id, level, type, startedAt, expiresAt, duration }
-  var logEntries = [];         // newest first
+  var API_URL = 'https://api.gold-api.com/price/XAU'; // gratis, tanpa API key
+  var activeAlerts = {}; // level -> {type, expiresAt, duration, startedAt, el}
+  var logEntries = []; // newest first
   var maxHistory = 140;
-  var armed = true;
-  var PIP_SIZE = 0.1;
+  var armed = true; // harus menyentuh level genap (…10,20,30,40) dulu sebelum sinyal baru boleh muncul
+  var PIP_SIZE = 0.1; // 1 pip = pergerakan harga 0.1 (konvensi umum XAU/USD di banyak broker)
   var signalCounter = 0;
 
-  // chart / view state
-  var viewStart = 0;
-  var viewEnd = 0;
-  var viewInitialized = false;
-  var showLevels = true;
-  var chartLayout = null;
-  var hoverIdx = -1;
-
-  // interaksi
-  var isDragging = false;
-  var dragStartX = 0;
-  var dragStartView = { s: 0, e: 0 };
-  var pinchStartDist = 0;
-  var pinchStartView = { s: 0, e: 0 };
-
-  // DOM
   var elPrice = document.getElementById('priceMain');
   var elChange = document.getElementById('priceChange');
   var elAlerts = document.getElementById('alerts');
   var elLog = document.getElementById('log');
+  var lampSell = document.getElementById('lampSell');
+  var lampIdle = document.getElementById('lampIdle');
+  var lampBuy = document.getElementById('lampBuy');
   var elToggle = document.getElementById('toggleBtn');
   var elReset = document.getElementById('resetBtn');
   var elSpeed = document.getElementById('speedSelect');
@@ -521,35 +484,22 @@
   var elStatusDot = document.getElementById('statusDot');
   var elStatusText = document.getElementById('statusText');
 
-  var elCanvas = document.getElementById('priceChart');
-  var elChartRange = document.getElementById('chartRange');
-  var elChartCount = document.getElementById('chartCount');
-  var elTooltip = document.getElementById('chartTooltip');
-  var elTtPrice = elTooltip.querySelector('.tt-price');
-  var elTtTime = document.getElementById('ttTime');
-  var elTtTag = document.getElementById('ttTag');
-  var elZoomIn = document.getElementById('zoomIn');
-  var elZoomOut = document.getElementById('zoomOut');
-  var elZoomReset = document.getElementById('zoomReset');
-  var elToggleLevels = document.getElementById('toggleLevels');
-
-  var ctx = elCanvas.getContext('2d');
-  var dpr = window.devicePixelRatio || 1;
-
   function fmt(n){ return n.toFixed(2); }
 
   function isSignalLevel(l){
+    // odd multiple of 5 == ends in 5 (mod 10 === 5)
     var m = Math.round(l) % 10;
     if (m < 0) m += 10;
     return m === 5;
   }
+
   function isResetLevel(l){
+    // kelipatan genap dari 10 (…10, 20, 30, 40 dst — berakhiran 0)
     var m = Math.round(l) % 10;
     if (m < 0) m += 10;
     return m === 0;
   }
 
-  // ---------- fetch loop ----------
   function step(){
     fetch(API_URL, { cache: 'no-store' })
       .then(function(res){
@@ -560,29 +510,17 @@
         var newPrice = Math.round(Number(data.price) * 100) / 100;
         if (!isFinite(newPrice)) throw new Error('harga tidak valid');
         setStatus(true, 'live');
-
         if (price === null) {
           price = newPrice;
           prevPrice = newPrice;
-          history.push({ p: newPrice, t: Date.now() });
+          history.push(newPrice);
           render();
           return;
         }
-
         prevPrice = price;
         price = newPrice;
-
-        var wasAtEnd = viewInitialized && (viewEnd === history.length - 1);
-        history.push({ p: price, t: Date.now() });
+        history.push(price);
         if (history.length > maxHistory) history.shift();
-
-        if (wasAtEnd) {
-          viewEnd = history.length - 1;
-          if (viewEnd - viewStart > maxHistory - 1) viewStart = Math.max(0, viewEnd - (maxHistory - 1));
-        }
-        if (viewEnd > history.length - 1) viewEnd = history.length - 1;
-        if (viewStart > viewEnd - 9) viewStart = Math.max(0, viewEnd - 9);
-
         checkCrossings(prevPrice, price);
         render();
       })
@@ -596,26 +534,26 @@
     elStatusDot.classList.toggle('paused', !ok);
   }
 
-  // ---------- signal detection ----------
   function checkCrossings(prev, cur){
     if (prev === cur) return;
     var up = cur > prev;
     var lo = Math.min(prev, cur), hi = Math.max(prev, cur);
+    // semua level kelipatan 5 (baik x5 maupun x0) yang terlewati
     var start = Math.ceil(lo / 5) * 5;
     var levels = [];
     for (var lvl = start; lvl <= hi + 0.0001; lvl += 5) {
       if (lvl < lo - 0.0001) continue;
       levels.push(Math.round(lvl * 100) / 100);
     }
-    if (!up) levels.reverse();
+    if (!up) levels.reverse(); // urutkan sesuai arah harga benar-benar menyentuhnya
 
     for (var i = 0; i < levels.length; i++) {
       var l = levels[i];
       if (isResetLevel(l)) {
-        armed = true;
+        armed = true; // harga sudah menyentuh level genap -> siap untuk sinyal berikutnya
       } else if (isSignalLevel(l) && armed) {
         triggerSignal(l, up ? 'resistance' : 'support');
-        armed = false;
+        armed = false; // kunci sampai menyentuh level genap lagi
       }
     }
   }
@@ -624,11 +562,13 @@
     var raw = type === 'support' ? (atPrice - entryLevel) : (entryLevel - atPrice);
     return Math.round((raw / PIP_SIZE) * 10) / 10;
   }
+
   function pipsClass(v){
     if (v > 0) return 'pos';
     if (v < 0) return 'neg';
     return 'flat';
   }
+
   function pipsLabel(v){
     return (v > 0 ? '+' : '') + v.toFixed(1) + ' pip';
   }
@@ -651,18 +591,23 @@
       time: new Date(),
       level: level,
       type: type,
-      pips: null
+      pips: null // diisi saat sinyal berakhir (10 detik selesai)
     });
     if (logEntries.length > 60) logEntries.pop();
     renderLog();
   }
 
-  // ---------- render: alerts ----------
+  function updateLamp(state){
+    lampSell.classList.toggle('on', state === 'sell');
+    lampIdle.classList.toggle('on', state === 'idle');
+    lampBuy.classList.toggle('on', state === 'buy');
+  }
+
   function renderAlerts(){
     var now = Date.now();
     var keys = Object.keys(activeAlerts);
     var logChanged = false;
-
+    // purge expired -> catat hasil pips final ke riwayat sebelum dihapus
     keys.forEach(function(k){
       var a = activeAlerts[k];
       if (a.expiresAt <= now) {
@@ -678,16 +623,20 @@
     if (logChanged) renderLog();
 
     if (keys.length === 0) {
+      updateLamp('idle');
       elAlerts.innerHTML = '<div class="empty-alerts">Belum ada sinyal aktif — menunggu harga menyentuh level x5</div>';
       return;
     }
+
+    var topType = activeAlerts[keys[0]].type;
+    updateLamp(topType !== 'support' ? 'buy' : 'sell'); // ikuti label yang sudah dibalik
 
     var html = keys.map(function(k){
       var a = activeAlerts[k];
       var remain = Math.max(0, a.expiresAt - now);
       var remainLabel = remain >= 1000 ? Math.ceil(remain/1000) + 's' : Math.ceil(remain/100)/10 + 's';
       var pct = Math.max(0, remain / a.duration) * 100;
-      var isSup = a.type === 'support';
+      var isSup = a.type !== 'support'; // label & warna dibalik dari arah sinyal aslinya
       var livePips = price !== null ? calcPips(a.level, a.type, price) : 0;
       return (
         '<div class="alert-card ' + (isSup ? 'support' : 'resistance') + '">' +
@@ -706,7 +655,6 @@
     elAlerts.innerHTML = html;
   }
 
-  // ---------- render: log ----------
   function renderLog(){
     if (logEntries.length === 0) {
       elLog.innerHTML = '<div class="log-empty">Sinyal yang terpicu akan muncul di sini</div>';
@@ -716,7 +664,7 @@
       var hh = e.time.getHours().toString().padStart(2,'0');
       var mm = e.time.getMinutes().toString().padStart(2,'0');
       var ss = e.time.getSeconds().toString().padStart(2,'0');
-      var isSup = e.type === 'support';
+      var isSup = e.type !== 'support'; // label & warna dibalik dari arah sinyal aslinya
       var pipsHtml = e.pips === null
         ? '<span class="pips flat">berjalan…</span>'
         : '<span class="pips ' + pipsClass(e.pips) + '">' + pipsLabel(e.pips) + '</span>';
@@ -736,448 +684,15 @@
     elLog.innerHTML = html;
   }
 
-  // ---------- render ----------
+
   function render(){
-    var firstP = history.length > 0 ? history[0].p : price;
-    var change = price - firstP;
+    var change = price - (history.length > 1 ? history[0] : price);
     elPrice.textContent = fmt(price);
     elChange.textContent = (change >= 0 ? '+' : '') + fmt(change);
     elChange.className = 'change mono ' + (change >= 0 ? 'up' : 'down');
 
     renderAlerts();
-    drawChart();
   }
-
-  // ---------- chart ----------
-  function resizeCanvas(){
-    var rect = elCanvas.getBoundingClientRect();
-    elCanvas.width  = Math.round(rect.width  * dpr);
-    elCanvas.height = Math.round(rect.height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  window.addEventListener('resize', function(){ resizeCanvas(); drawChart(); });
-
-  function clampView(){
-    if (history.length < 2) { viewStart = 0; viewEnd = 0; return; }
-    if (viewEnd - viewStart < 9) {
-      var mid = (viewStart + viewEnd) / 2;
-      viewStart = Math.round(mid - 4.5);
-      viewEnd = viewStart + 9;
-    }
-    if (viewStart < 0) { viewEnd += -viewStart; viewStart = 0; }
-    if (viewEnd > history.length - 1) {
-      viewStart -= (viewEnd - (history.length - 1));
-      viewEnd = history.length - 1;
-      if (viewStart < 0) viewStart = 0;
-    }
-  }
-
-  function initViewIfNeeded(){
-    if (viewInitialized) return;
-    if (history.length < 2) return;
-    viewStart = 0;
-    viewEnd = history.length - 1;
-    viewInitialized = true;
-  }
-
-  function drawChart(){
-    var rect = elCanvas.getBoundingClientRect();
-    var W = rect.width, H = rect.height;
-    if (W === 0 || H === 0) return;
-
-    ctx.clearRect(0, 0, W, H);
-
-    if (history.length < 2) {
-      elChartRange.textContent = '—';
-      elChartCount.textContent = '0 titik';
-      return;
-    }
-
-    initViewIfNeeded();
-    clampView();
-
-    var padL = 8, padR = 56, padT = 26, padB = 22;
-    var plotW = W - padL - padR;
-    var plotH = H - padT - padB;
-
-    var data = history.slice(viewStart, viewEnd + 1);
-    var n = data.length;
-
-    var prices = data.map(function(h){ return h.p; });
-    var min = Math.min.apply(null, prices);
-    var max = Math.max.apply(null, prices);
-    var pad = (max - min) * 0.08 || 1;
-    min -= pad; max += pad;
-    var range = max - min;
-
-    function xAt(i){ return padL + (i / (n - 1)) * plotW; }
-    function yAt(p){ return padT + (1 - (p - min) / range) * plotH; }
-
-    // grid
-    ctx.strokeStyle = 'rgba(35,42,53,0.6)';
-    ctx.lineWidth = 1;
-    var gridLines = 4;
-    ctx.font = '10px "IBM Plex Mono", monospace';
-    ctx.fillStyle = '#565f6d';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    for (var g = 0; g <= gridLines; g++) {
-      var p = min + (range * g / gridLines);
-      var y = yAt(p);
-      ctx.beginPath();
-      ctx.moveTo(padL, y);
-      ctx.lineTo(padL + plotW, y);
-      ctx.stroke();
-      ctx.fillText(p.toFixed(2), padL + plotW + 6, y);
-    }
-
-    // level sinyal
-    if (showLevels) {
-      var startLvl = Math.ceil(min / 5) * 5;
-      for (var lv = startLvl; lv <= max; lv += 5) {
-        var yy = yAt(lv);
-        if (yy < padT || yy > padT + plotH) continue;
-        var isSignal = (Math.round(lv) % 10) === 5;
-        ctx.save();
-        ctx.setLineDash([3, 4]);
-        ctx.strokeStyle = isSignal ? 'rgba(201,162,74,0.45)' : 'rgba(139,147,161,0.22)';
-        ctx.beginPath();
-        ctx.moveTo(padL, yy);
-        ctx.lineTo(padL + plotW, yy);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // area + garis
-    var grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
-    grad.addColorStop(0, 'rgba(61,165,255,0.22)');
-    grad.addColorStop(1, 'rgba(61,165,255,0)');
-
-    ctx.beginPath();
-    ctx.moveTo(xAt(0), yAt(data[0].p));
-    for (var i = 1; i < n; i++) ctx.lineTo(xAt(i), yAt(data[i].p));
-    ctx.lineTo(xAt(n - 1), padT + plotH);
-    ctx.lineTo(xAt(0), padT + plotH);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(xAt(0), yAt(data[0].p));
-    for (var j = 1; j < n; j++) ctx.lineTo(xAt(j), yAt(data[j].p));
-    ctx.strokeStyle = '#3da5ff';
-    ctx.lineWidth = 1.6;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-
-    // zona sinyal aktif
-    var now = Date.now();
-    Object.keys(activeAlerts).forEach(function(k){
-      var a = activeAlerts[k];
-      var levelY = yAt(a.level);
-      if (levelY < padT || levelY > padT + plotH) return;
-
-      var isSup = a.type === 'support';
-      var color = isSup ? '#3da5ff' : '#ff4d4d';
-      var soft  = isSup ? 'rgba(61,165,255,' : 'rgba(255,77,77,';
-
-      var startIdx = -1;
-      for (var hh = 0; hh < n; hh++) {
-        if (data[hh].t >= a.startedAt) { startIdx = hh; break; }
-      }
-      if (startIdx < 0) return;
-
-      var x1 = xAt(startIdx);
-      var x2 = padL + plotW;
-
-      ctx.save();
-      var zoneGrad = ctx.createLinearGradient(x1, 0, x2, 0);
-      zoneGrad.addColorStop(0, soft + '0.18)');
-      zoneGrad.addColorStop(1, soft + '0.03)');
-      ctx.fillStyle = zoneGrad;
-      ctx.fillRect(x1, padT, x2 - x1, plotH);
-      ctx.restore();
-
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.4;
-      ctx.setLineDash([5, 3]);
-      ctx.beginPath();
-      ctx.moveTo(x1, levelY);
-      ctx.lineTo(x2, levelY);
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.font = '600 10px "IBM Plex Mono", monospace';
-      var lbl = (isSup ? 'BUY ' : 'SELL ') + a.level.toFixed(0);
-      var lblW = ctx.measureText(lbl).width + 10;
-      ctx.fillStyle = color;
-      ctx.fillRect(x1 + 4, levelY - 16, lblW, 14);
-      ctx.fillStyle = '#0a0d12';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(lbl, x1 + 9, levelY - 9);
-
-      var pct = Math.max(0, (a.expiresAt - now) / a.duration);
-      var barH = 3;
-      var barY = padT + plotH - barH;
-      ctx.fillStyle = soft + '0.25)';
-      ctx.fillRect(x1, barY, x2 - x1, barH);
-      ctx.fillStyle = color;
-      ctx.fillRect(x1, barY, (x2 - x1) * pct, barH);
-    });
-
-    // titik terakhir
-    if (viewEnd === history.length - 1) {
-      var lastX = xAt(n - 1);
-      var lastY = yAt(data[n - 1].p);
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 3.2, 0, Math.PI * 2);
-      ctx.fillStyle = '#3da5ff';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 6.5, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(61,165,255,0.35)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      var lastLabel = data[n - 1].p.toFixed(2);
-      ctx.font = '600 10.5px "IBM Plex Mono", monospace';
-      var lblW2 = ctx.measureText(lastLabel).width + 10;
-      var lblX2 = padL + plotW + 4;
-      var lblY2 = Math.max(padT + 8, Math.min(padT + plotH - 8, lastY));
-      ctx.fillStyle = '#3da5ff';
-      ctx.fillRect(lblX2, lblY2 - 8, lblW2, 16);
-      ctx.fillStyle = '#0a0d12';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(lastLabel, lblX2 + lblW2 / 2, lblY2);
-    }
-
-    // crosshair hover
-    if (hoverIdx >= viewStart && hoverIdx <= viewEnd) {
-      var hx = xAt(hoverIdx - viewStart);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(232,230,223,0.28)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(hx, padT);
-      ctx.lineTo(hx, padT + plotH);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(hx, yAt(history[hoverIdx].p), 3, 0, Math.PI * 2);
-      ctx.fillStyle = '#e8e6df';
-      ctx.fill();
-      ctx.restore();
-    }
-
-    chartLayout = {
-      padL: padL, padT: padT, plotW: plotW, plotH: plotH,
-      min: min, range: range, W: W, H: H,
-      viewStart: viewStart, viewEnd: viewEnd, n: n
-    };
-
-    var first = data[0].p.toFixed(2);
-    var last  = data[n - 1].p.toFixed(2);
-    var rangeLabel = n < history.length
-      ? first + ' → ' + last + '  (' + n + '/' + history.length + ')'
-      : first + ' → ' + last;
-    elChartRange.textContent = rangeLabel;
-    elChartCount.textContent = history.length + ' titik';
-  }
-
-  // ---------- hover / tooltip ----------
-  function findNearestIndex(clientX){
-    if (!chartLayout || history.length < 2) return -1;
-    var rect = elCanvas.getBoundingClientRect();
-    var x = clientX - rect.left;
-    var rel = (x - chartLayout.padL) / chartLayout.plotW;
-    if (rel < -0.05 || rel > 1.05) return -1;
-    var localIdx = Math.round(rel * (chartLayout.n - 1));
-    localIdx = Math.max(0, Math.min(chartLayout.n - 1, localIdx));
-    return chartLayout.viewStart + localIdx;
-  }
-
-  function showTooltip(idx, clientX){
-    if (idx < 0 || !chartLayout) { hideTooltip(); return; }
-    var h = history[idx];
-    var cardRect = document.getElementById('chartCard').getBoundingClientRect();
-    var xInCard = clientX - cardRect.left;
-
-    var tag = null;
-    Object.keys(activeAlerts).forEach(function(k){
-      var a = activeAlerts[k];
-      var idxStart = -1;
-      for (var i = 0; i < history.length; i++) {
-        if (history[i].t >= a.startedAt) { idxStart = i; break; }
-      }
-      if (idxStart >= 0 && idx >= idxStart) tag = a.type;
-    });
-
-    var d = new Date(h.t);
-    var hh = d.getHours().toString().padStart(2,'0');
-    var mm = d.getMinutes().toString().padStart(2,'0');
-    var ss = d.getSeconds().toString().padStart(2,'0');
-
-    elTtPrice.textContent = h.p.toFixed(2);
-    elTtTime.textContent  = hh + ':' + mm + ':' + ss;
-    if (tag) {
-      elTtTag.style.display = 'inline-block';
-      elTtTag.textContent = tag === 'support' ? 'BUY' : 'SELL';
-      elTtTag.className = 'tt-tag ' + (tag === 'support' ? 'sup' : 'res');
-    } else {
-      elTtTag.style.display = 'none';
-    }
-
-    elTooltip.style.left = xInCard + 'px';
-    elTooltip.style.top  = (chartLayout.padT + 4) + 'px';
-    elTooltip.classList.add('show');
-  }
-  function hideTooltip(){ elTooltip.classList.remove('show'); }
-
-  // ---------- pointer events ----------
-  elCanvas.addEventListener('pointermove', function(e){
-    if (isDragging) {
-      var dx = e.clientX - dragStartX;
-      var perPx = (dragStartView.e - dragStartView.s) / (chartLayout ? chartLayout.plotW : 1);
-      var shift = Math.round(-dx * perPx);
-      var s = dragStartView.s + shift;
-      var eIdx = dragStartView.e + shift;
-      if (s < 0) { eIdx -= s; s = 0; }
-      if (eIdx > history.length - 1) { s -= (eIdx - (history.length - 1)); eIdx = history.length - 1; }
-      if (s < 0) s = 0;
-      viewStart = s; viewEnd = eIdx;
-      drawChart();
-      return;
-    }
-    var idx = findNearestIndex(e.clientX);
-    hoverIdx = idx;
-    if (idx >= 0) showTooltip(idx, e.clientX);
-    else hideTooltip();
-  });
-
-  elCanvas.addEventListener('pointerleave', function(){
-    hoverIdx = -1;
-    hideTooltip();
-  });
-
-  elCanvas.addEventListener('pointerdown', function(e){
-    if (history.length < 2) return;
-    isDragging = true;
-    dragStartX = e.clientX;
-    dragStartView = { s: viewStart, e: viewEnd };
-    elCanvas.setPointerCapture(e.pointerId);
-    elCanvas.style.cursor = 'grabbing';
-    hideTooltip();
-  });
-  elCanvas.addEventListener('pointerup', function(e){
-    isDragging = false;
-    try { elCanvas.releasePointerCapture(e.pointerId); } catch(_) {}
-    elCanvas.style.cursor = '';
-  });
-  elCanvas.addEventListener('pointercancel', function(){
-    isDragging = false;
-    elCanvas.style.cursor = '';
-  });
-
-  elCanvas.addEventListener('wheel', function(e){
-    if (history.length < 2) return;
-    e.preventDefault();
-    var factor = e.deltaY > 0 ? 1.18 : 0.85;
-
-    var rect = elCanvas.getBoundingClientRect();
-    var x = e.clientX - rect.left;
-    var rel = (x - chartLayout.padL) / chartLayout.plotW;
-    rel = Math.max(0, Math.min(1, rel));
-    var anchor = viewStart + rel * (viewEnd - viewStart);
-
-    var span = (viewEnd - viewStart) * factor;
-    span = Math.max(9, Math.min(history.length - 1, span));
-    var s = Math.round(anchor - rel * span);
-    var eIdx = s + Math.round(span);
-
-    if (s < 0) { eIdx -= s; s = 0; }
-    if (eIdx > history.length - 1) { s -= (eIdx - (history.length - 1)); eIdx = history.length - 1; }
-    if (s < 0) s = 0;
-
-    viewStart = s; viewEnd = eIdx;
-    drawChart();
-  }, { passive: false });
-
-  elCanvas.addEventListener('touchstart', function(e){
-    if (e.touches.length === 2 && history.length > 1) {
-      pinchStartDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      pinchStartView = { s: viewStart, e: viewEnd };
-      isDragging = false;
-    }
-  }, { passive: true });
-
-  elCanvas.addEventListener('touchmove', function(e){
-    if (e.touches.length === 2 && pinchStartDist > 0) {
-      e.preventDefault();
-      var dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      var ratio = pinchStartDist / dist;
-      var span = (pinchStartView.e - pinchStartView.s) * ratio;
-      span = Math.max(9, Math.min(history.length - 1, span));
-      var mid = (pinchStartView.s + pinchStartView.e) / 2;
-      var s = Math.round(mid - span / 2);
-      var eIdx = s + Math.round(span);
-      if (s < 0) { eIdx -= s; s = 0; }
-      if (eIdx > history.length - 1) { s -= (eIdx - (history.length - 1)); eIdx = history.length - 1; }
-      if (s < 0) s = 0;
-      viewStart = s; viewEnd = eIdx;
-      drawChart();
-    }
-  }, { passive: false });
-
-  elCanvas.addEventListener('touchend', function(){
-    pinchStartDist = 0;
-  });
-
-  // ---------- tombol zoom ----------
-  function zoomBy(factor){
-    if (history.length < 2) return;
-    var span = (viewEnd - viewStart) * factor;
-    span = Math.max(9, Math.min(history.length - 1, span));
-    var mid = (viewStart + viewEnd) / 2;
-    var s = Math.round(mid - span / 2);
-    var eIdx = s + Math.round(span);
-    if (s < 0) { eIdx -= s; s = 0; }
-    if (eIdx > history.length - 1) { s -= (eIdx - (history.length - 1)); eIdx = history.length - 1; }
-    if (s < 0) s = 0;
-    viewStart = s; viewEnd = eIdx;
-    drawChart();
-  }
-  elZoomIn.addEventListener('click', function(){ zoomBy(0.7); });
-  elZoomOut.addEventListener('click', function(){ zoomBy(1.4); });
-  elZoomReset.addEventListener('click', function(){
-    viewStart = 0;
-    viewEnd = history.length - 1;
-    viewInitialized = true;
-    drawChart();
-  });
-  elToggleLevels.addEventListener('click', function(){
-    showLevels = !showLevels;
-    elToggleLevels.classList.toggle('on', showLevels);
-    drawChart();
-  });
-
-  // ---------- keyboard shortcut ----------
-  window.addEventListener('keydown', function(e){
-    var tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-    if (e.key === '+' || e.key === '=') { zoomBy(0.7); }
-    else if (e.key === '-' || e.key === '_') { zoomBy(1.4); }
-    else if (e.key === '0') { elZoomReset.click(); }
-    else if (e.key === 's' || e.key === 'S') { elToggleLevels.click(); }
-  });
 
   // ---------- loop ----------
   function scheduleNext(){
@@ -1185,7 +700,7 @@
     timer = setTimeout(function(){ step(); scheduleNext(); }, tickMs);
   }
   function scheduleAlertRefresh(){
-    setInterval(function(){ renderAlerts(); render(); }, 250);
+    setInterval(function(){ renderAlerts(); }, 250);
   }
 
   function start(){
@@ -1211,12 +726,8 @@
     activeAlerts = {};
     logEntries = [];
     armed = true;
-    viewStart = 0;
-    viewEnd = 0;
-    viewInitialized = false;
     renderLog();
     renderAlerts();
-    drawChart();
     step();
   });
   elSpeed.addEventListener('change', function(){
@@ -1227,10 +738,10 @@
     renderLog();
   });
 
-  // ---------- init ----------
-  resizeCanvas();
-  renderLog();
+
+
   setStatus(true, 'menghubungkan…');
+  renderLog();
   start();
   scheduleAlertRefresh();
 })();
