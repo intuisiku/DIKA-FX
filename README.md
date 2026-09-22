@@ -1,0 +1,2 @@
+# DIKA-FX
+XAU SIGNAL
