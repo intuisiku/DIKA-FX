@@ -77,7 +77,8 @@
     gap: 6px;
   }
   .dot {
-    width: 6px; height: 6px; border-radius: 50%;
+    width: 6px; height: 6px;
+    border-radius: 50%;
     background: var(--green);
     box-shadow: 0 0 6px var(--green);
   }
@@ -232,12 +233,17 @@
     border-radius: var(--radius);
     padding: 12px 14px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 10px;
     border: 1px solid;
     position: relative;
     overflow: hidden;
+  }
+  .alert-card .row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
   .alert-card .info { display: flex; flex-direction: column; gap: 2px; }
   .alert-card .label {
@@ -277,6 +283,50 @@
     height: 2px;
     background: currentColor;
     opacity: 0.8;
+  }
+  .alert-card .tpsl {
+    display: flex;
+    gap: 8px;
+    border-top: 1px dashed rgba(255,255,255,0.08);
+    padding-top: 8px;
+  }
+  .alert-card .tpsl .cell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    position: relative;
+  }
+  .alert-card .tpsl .cell .k {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+  }
+  .alert-card .tpsl .cell .v {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .alert-card .tpsl .cell.tp .v { color: var(--green); }
+  .alert-card .tpsl .cell.sl .v { color: var(--gold); }
+  .alert-card .tpsl .cell.sl.trail .v {
+    color: var(--green);
+    text-shadow: 0 0 8px rgba(74,222,128,0.6);
+  }
+  .alert-card .tpsl .cell .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .alert-card .tpsl .cell.sl.trail .badge {
+    background: rgba(74,222,128,0.2);
+    color: var(--green);
   }
 
   .alert-card.support {
@@ -391,8 +441,9 @@
   .log-row .line2 {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 8px;
+    flex-wrap: wrap;
   }
   .log-row:last-child { border-bottom: none; }
   .log-row .t { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
@@ -415,6 +466,15 @@
   }
   .tag.sup { color: var(--blue); background: rgba(61,165,255,0.12); }
   .tag.res { color: var(--red); background: rgba(255,77,77,0.12); }
+  .log-row .tpsl-inline {
+    display: flex;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+  }
+  .log-row .tpsl-inline .tp { color: var(--green); }
+  .log-row .tpsl-inline .sl { color: var(--gold); }
+  .log-row .tpsl-inline .sl.trail { color: var(--green); }
   .log-empty {
     padding: 20px 12px;
     text-align: center;
@@ -502,7 +562,7 @@
   var tickMs = 1000;
   var timer = null;
   var API_URL = 'https://api.gold-api.com/price/XAU'; // gratis, tanpa API key
-  var activeAlerts = {}; // id -> {id, level, type, expiresAt, duration, startedAt}
+  var activeAlerts = {}; // id -> {id, level, type, tp, sl, slInit, trailing, trailStart, expiresAt, duration, startedAt}
   var logEntries = []; // newest first
   var maxHistory = 140;
   var PIP_SIZE = 0.1; // 1 pip = pergerakan harga 0.1
@@ -510,6 +570,23 @@
 
   // parameter indikator (internal, tidak ditampilkan sebagai RSI)
   var RSI_PERIOD = 5;
+
+  // level ambang sinyal (30/70 biar lebih cepat trigger)
+  var LEVEL_LOW = 30;
+  var LEVEL_HIGH = 70;
+  var LEVEL_MID = 50;
+
+  // ---- TP & SL DINAMIS (berbasis ATR M1) ----
+  var ATR_PERIOD = 14;      // periode ATR dari candle M1
+  var ATR_MIN = 0.30;       // jarak minimum agar tidak terlalu rapat
+  var ATR_MAX = 3.00;       // jarak maksimum agar tidak terlalu lebar
+  var SL_ATR_MULT = 1.2;    // SL = 1.2 x ATR M1 ("SL plus")
+  var TP_ATR_MULT = 2.0;    // TP = 2.0 x ATR M1 (R:R = ~1.67)
+
+  // ---- TRAILING STOP ----
+  var TRAIL_START_MULT = 1.0; // mulai trailing setelah profit >= 1.0x jarak SL awal
+  var TRAIL_ATR_MULT = 1.0;   // jarak trail dari harga tertinggi/terendah = 1.0 x ATR
+  var TRAIL_STEP_MIN = 0.05;  // minimal pergeseran SL agar dianggap update (anti noise)
 
   // candle M1 & M5 dibangun dari harga live
   var M1 = [], M5 = [];
@@ -519,8 +596,9 @@
   // state internal untuk deteksi sinyal
   var lastRsiM1 = null, prevRsiM1 = null;
   var lastRsiM5 = null;
-  var armSell = false; // sudah sentuh level bawah, menunggu naik ke tengah
-  var armBuy = false;  // sudah sentuh level atas, menunggu turun ke tengah
+  var armSell = false;
+  var armBuy = false;
+  var lastAtrM1 = null;
 
   var elAlerts = document.getElementById('alerts');
   var elLog = document.getElementById('log');
@@ -558,34 +636,57 @@
     return 100 - (100 / (1 + rs));
   }
 
+  // ATR sederhana dari candle M1 (True Range rata-rata)
+  function computeATR(candles, period){
+    if (candles.length < period + 1) return null;
+    var sum = 0;
+    var start = candles.length - period;
+    for (var i = start; i < candles.length; i++) {
+      var c = candles[i];
+      var prevClose = candles[i - 1].c;
+      var tr = Math.max(
+        c.h - c.l,
+        Math.abs(c.h - prevClose),
+        Math.abs(c.l - prevClose)
+      );
+      sum += tr;
+    }
+    var atr = sum / period;
+    if (!isFinite(atr) || atr <= 0) return null;
+    return Math.max(ATR_MIN, Math.min(ATR_MAX, atr));
+  }
+
   function onM1Close(){
+    // hitung ATR dari candle M1 yang sudah close
+    lastAtrM1 = computeATR(M1, ATR_PERIOD);
+
     var closesM1 = M1.map(function(k){ return k.c; });
     var rsiM1 = computeRSI(closesM1, RSI_PERIOD);
     var closesM5 = M5.map(function(k){ return k.c; }).concat(curM5 ? [curM5.c] : []);
     var rsiM5 = computeRSI(closesM5, RSI_PERIOD);
 
-    // --- arming ---
-    if (rsiM1 !== null && rsiM1 <= 20) armSell = true;
-    if (rsiM1 !== null && rsiM1 >= 80) armBuy = true;
+    // --- arming dengan level 30/70 ---
+    if (rsiM1 !== null && rsiM1 <= LEVEL_LOW) armSell = true;
+    if (rsiM1 !== null && rsiM1 >= LEVEL_HIGH) armBuy = true;
 
     // --- trigger SELL ---
-    if (armSell && rsiM5 !== null && rsiM5 < 50 && rsiM1 !== null && prevRsiM1 !== null) {
-      if (prevRsiM1 < 50 && rsiM1 >= 50) {
+    if (armSell && rsiM5 !== null && rsiM5 < LEVEL_MID && rsiM1 !== null && prevRsiM1 !== null) {
+      if (prevRsiM1 < LEVEL_MID && rsiM1 >= LEVEL_MID) {
         triggerSignal(price, 'sell');
         armSell = false;
       }
     }
     // --- trigger BUY ---
-    if (armBuy && rsiM5 !== null && rsiM5 > 50 && rsiM1 !== null && prevRsiM1 !== null) {
-      if (prevRsiM1 > 50 && rsiM1 <= 50) {
+    if (armBuy && rsiM5 !== null && rsiM5 > LEVEL_MID && rsiM1 !== null && prevRsiM1 !== null) {
+      if (prevRsiM1 > LEVEL_MID && rsiM1 <= LEVEL_MID) {
         triggerSignal(price, 'buy');
         armBuy = false;
       }
     }
 
-    // reset arming kalau kondisi sudah tidak relevan
-    if (rsiM5 !== null && rsiM5 >= 50 && armSell && rsiM1 !== null && rsiM1 > 80) armSell = false;
-    if (rsiM5 !== null && rsiM5 <= 50 && armBuy && rsiM1 !== null && rsiM1 < 20) armBuy = false;
+    // reset arming kalau sudah lewat level ekstrem yang berlawanan
+    if (rsiM5 !== null && rsiM5 >= LEVEL_MID && armSell && rsiM1 !== null && rsiM1 > LEVEL_HIGH) armSell = false;
+    if (rsiM5 !== null && rsiM5 <= LEVEL_MID && armBuy && rsiM1 !== null && rsiM1 < LEVEL_LOW) armBuy = false;
 
     prevRsiM1 = rsiM1;
     lastRsiM1 = rsiM1;
@@ -640,6 +741,7 @@
         history.push(price);
         if (history.length > maxHistory) history.shift();
         updateCandles(now, price);
+        updateTrailing();
         render();
       })
       .catch(function(err){
@@ -667,29 +769,95 @@
     return (v > 0 ? '+' : '') + v.toFixed(1) + ' pip';
   }
 
+  // TP & SL dinamis dari ATR. Fallback ke nilai tetap kalau ATR belum siap.
+  function computeTPSL(level, type){
+    var atr = lastAtrM1;
+    var slDist, tpDist;
+    if (atr === null) {
+      slDist = 1.0;
+      tpDist = 1.5;
+    } else {
+      slDist = Math.max(ATR_MIN, Math.min(ATR_MAX, atr * SL_ATR_MULT));
+      tpDist = Math.max(ATR_MIN, Math.min(ATR_MAX, atr * TP_ATR_MULT));
+    }
+    if (type === 'buy') {
+      return { tp: level + tpDist, sl: level - slDist, slDist: slDist };
+    }
+    return { tp: level - tpDist, sl: level + slDist, slDist: slDist };
+  }
+
   function triggerSignal(level, type){
     if (level === null) return;
     var now = Date.now();
     var duration = 20000;
     signalCounter++;
     var id = signalCounter;
+    var tpsl = computeTPSL(level, type);
     activeAlerts[id] = {
-      id: id, level: level, type: type, startedAt: now, expiresAt: now + duration, duration: duration
+      id: id, level: level, type: type,
+      tp: tpsl.tp, sl: tpsl.sl, slInit: tpsl.sl,
+      slDistInit: tpsl.slDist,
+      trailing: false,
+      trailRef: level, // harga acuan trailing (tertinggi utk buy, terendah utk sell)
+      startedAt: now, expiresAt: now + duration, duration: duration
     };
-    addLogEntry(id, level, type);
+    addLogEntry(id, level, type, tpsl.tp, tpsl.sl);
     renderAlerts();
   }
 
-  function addLogEntry(id, level, type){
+  function addLogEntry(id, level, type, tp, sl){
     logEntries.unshift({
       id: id,
       time: new Date(),
       level: level,
       type: type,
+      tp: tp,
+      sl: sl,
       pips: null
     });
     if (logEntries.length > 60) logEntries.pop();
     renderLog();
+  }
+
+  // ---- TRAILING STOP ----
+  // Update SL mengikuti harga: untuk BUY SL naik, untuk SELL SL turun.
+  // Trailing baru aktif setelah profit >= TRAIL_START_MULT x jarak SL awal.
+  function updateTrailing(){
+    if (price === null || lastAtrM1 === null) return;
+    var trailDist = Math.max(ATR_MIN, Math.min(ATR_MAX, lastAtrM1 * TRAIL_ATR_MULT));
+    var keys = Object.keys(activeAlerts);
+    for (var i = 0; i < keys.length; i++) {
+      var a = activeAlerts[keys[i]];
+      if (a.type === 'buy') {
+        // perbarui referensi tertinggi
+        if (price > a.trailRef) a.trailRef = price;
+        var profit = price - a.level;
+        if (!a.trailing && profit >= a.slDistInit * TRAIL_START_MULT) {
+          a.trailing = true;
+        }
+        if (a.trailing) {
+          var newSl = a.trailRef - trailDist;
+          // SL hanya boleh naik
+          if (newSl > a.sl + TRAIL_STEP_MIN) a.sl = newSl;
+          // jaga SL tetap di bawah harga saat ini
+          if (a.sl >= price) a.sl = price - trailDist;
+        }
+      } else {
+        // SELL: perbarui referensi terendah
+        if (price < a.trailRef) a.trailRef = price;
+        var profitS = a.level - price;
+        if (!a.trailing && profitS >= a.slDistInit * TRAIL_START_MULT) {
+          a.trailing = true;
+        }
+        if (a.trailing) {
+          var newSlS = a.trailRef + trailDist;
+          // SL hanya boleh turun
+          if (newSlS < a.sl - TRAIL_STEP_MIN) a.sl = newSlS;
+          // jaga SL tetap di atas harga saat ini
+          if (a.sl <= price) a.sl = price + trailDist;
+        }
+      }
+    }
   }
 
   function setGauge(fillEl, pctEl, val){
@@ -707,12 +875,10 @@
     fillEl.classList.toggle('sell', !bullish);
     pctEl.classList.toggle('buy', bullish);
     pctEl.classList.toggle('sell', !bullish);
-    fillEl.classList.toggle('hot', v >= 80 || v <= 20);
+    fillEl.classList.toggle('hot', v >= LEVEL_HIGH || v <= LEVEL_LOW);
   }
 
   function updateGauges(){
-    // gauge SELL ditampilkan sebagai kebalikan (semakin rendah makin siap sell)
-    // agar bar tetap terisi penuh ketika kondisi siap jual
     var sellVal = lastRsiM1 === null ? null : (100 - lastRsiM1);
     setGauge(psSellFill, psSellPct, sellVal);
     setGauge(psBuyFill, psBuyPct, lastRsiM5);
@@ -733,7 +899,13 @@
       if (a.expiresAt <= now) {
         var finalPips = price !== null ? calcPips(a.level, a.type, price) : 0;
         for (var i = 0; i < logEntries.length; i++) {
-          if (logEntries[i].id === a.id) { logEntries[i].pips = finalPips; logChanged = true; break; }
+          if (logEntries[i].id === a.id) {
+            logEntries[i].pips = finalPips;
+            logEntries[i].sl = a.sl;
+            logEntries[i].trail = a.trailing;
+            logChanged = true;
+            break;
+          }
         }
         delete activeAlerts[k];
       }
@@ -758,15 +930,30 @@
       var pct = Math.max(0, remain / a.duration) * 100;
       var isSup = a.type === 'buy';
       var livePips = price !== null ? calcPips(a.level, a.type, price) : 0;
+      var slClass = a.trailing ? 'sl trail' : 'sl';
+      var slBadge = a.trailing ? '<span class="badge">TRAIL</span>' : '';
+      var slKey = a.trailing ? 'SL TRAIL' : 'SL PLUS';
       return (
         '<div class="alert-card ' + (isSup ? 'support' : 'resistance') + '">' +
-          '<div class="info">' +
-            '<span class="label">' + (isSup ? 'BUY NOW' : 'SELL NOW') + '</span>' +
-            '<span class="level mono">' + a.level.toFixed(2) + '</span>' +
+          '<div class="row-top">' +
+            '<div class="info">' +
+              '<span class="label">' + (isSup ? 'BUY NOW' : 'SELL NOW') + '</span>' +
+              '<span class="level mono">' + a.level.toFixed(2) + '</span>' +
+            '</div>' +
+            '<div class="metrics">' +
+              '<span class="timer">' + remainLabel + '</span>' +
+              '<span class="pips ' + pipsClass(livePips) + '">' + pipsLabel(livePips) + '</span>' +
+            '</div>' +
           '</div>' +
-          '<div class="metrics">' +
-            '<span class="timer">' + remainLabel + '</span>' +
-            '<span class="pips ' + pipsClass(livePips) + '">' + pipsLabel(livePips) + '</span>' +
+          '<div class="tpsl">' +
+            '<div class="cell tp">' +
+              '<span class="k">TP</span>' +
+              '<span class="v">' + a.tp.toFixed(2) + '</span>' +
+            '</div>' +
+            '<div class="cell ' + slClass + '">' +
+              '<span class="k">' + slKey + slBadge + '</span>' +
+              '<span class="v">' + a.sl.toFixed(2) + '</span>' +
+            '</div>' +
           '</div>' +
           '<div class="bar" style="width:' + pct + '%"></div>' +
         '</div>'
@@ -788,6 +975,15 @@
       var pipsHtml = e.pips === null
         ? '<span class="pips flat">berjalan…</span>'
         : '<span class="pips ' + pipsClass(e.pips) + '">' + pipsLabel(e.pips) + '</span>';
+      var tpslHtml = '';
+      if (e.tp !== undefined && e.tp !== null) {
+        var slCls = e.trail ? 'sl trail' : 'sl';
+        var slLbl = e.trail ? 'SL-T ' : 'SL+ ';
+        tpslHtml = '<span class="tpsl-inline">' +
+          '<span class="tp">TP ' + e.tp.toFixed(2) + '</span>' +
+          '<span class="' + slCls + '">' + slLbl + e.sl.toFixed(2) + '</span>' +
+        '</span>';
+      }
       return (
         '<div class="log-row">' +
           '<div class="line1">' +
@@ -796,6 +992,7 @@
           '</div>' +
           '<div class="line2">' +
             '<span class="kind mono">@ ' + e.level.toFixed(2) + '</span>' +
+            tpslHtml +
             pipsHtml +
           '</div>' +
         '</div>'
@@ -845,6 +1042,7 @@
     curM1 = null; curM1Bucket = null;
     curM5 = null; curM5Bucket = null;
     lastRsiM1 = null; prevRsiM1 = null; lastRsiM5 = null;
+    lastAtrM1 = null;
     armSell = false; armBuy = false;
     renderLog();
     renderAlerts();
