@@ -83,39 +83,6 @@
   }
   .dot.paused { background: var(--text-faint); box-shadow: none; }
 
-  /* price block */
-  .price-block {
-    padding: 22px 0 18px;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .price-main {
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 600;
-    font-size: clamp(38px, 11vw, 54px);
-    line-height: 1;
-    letter-spacing: -0.5px;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .price-main .change {
-    font-size: 15px;
-    font-weight: 500;
-  }
-  .change.up { color: var(--green); }
-  .change.down { color: var(--red); }
-  .price-sub {
-    font-size: 11px;
-    color: var(--text-dim);
-    text-align: right;
-    line-height: 1.6;
-  }
-  .price-sub b { color: var(--text); font-weight: 500; }
-
   /* lampu indikator */
   .lamp-card {
     background: var(--bg-panel);
@@ -125,6 +92,7 @@
     display: flex;
     justify-content: center;
     gap: clamp(22px, 8vw, 48px);
+    margin-top: 18px;
   }
   .lamp {
     display: flex;
@@ -185,7 +153,7 @@
     .lamp.on .bulb { animation: none; }
   }
 
-  /* indikator persentase RSI */
+  /* indikator persentase siap jual / siap beli */
   .ps-card {
     background: var(--bg-panel);
     border: 1px solid var(--line);
@@ -205,7 +173,7 @@
     font-family: 'IBM Plex Mono', monospace;
     font-size: 10.5px;
     letter-spacing: 0.4px;
-    width: 64px;
+    width: 110px;
     flex: none;
     color: var(--text-dim);
   }
@@ -490,12 +458,12 @@
 
   <div class="ps-card">
     <div class="ps-row">
-      <span class="ps-label">RSI M1</span>
+      <span class="ps-label">SIGNAL SIAP SELL</span>
       <div class="ps-track"><div class="ps-fill" id="psSellFill"></div></div>
       <span class="ps-pct" id="psSellPct">–</span>
     </div>
     <div class="ps-row">
-      <span class="ps-label">RSI M5</span>
+      <span class="ps-label">SIGNAL SIAP BUY</span>
       <div class="ps-track"><div class="ps-fill" id="psBuyFill"></div></div>
       <span class="ps-pct" id="psBuyPct">–</span>
     </div>
@@ -540,19 +508,19 @@
   var PIP_SIZE = 0.1; // 1 pip = pergerakan harga 0.1
   var signalCounter = 0;
 
-  // parameter indikator RSI (5,3,3 style -> smoothing tetap pakai Wilder sederhana)
-  var RSI_PERIOD = 5;   // RSI(5)
+  // parameter indikator (internal, tidak ditampilkan sebagai RSI)
+  var RSI_PERIOD = 5;
 
   // candle M1 & M5 dibangun dari harga live
   var M1 = [], M5 = [];
   var curM1 = null, curM1Bucket = null;
   var curM5 = null, curM5Bucket = null;
 
-  // state RSI M1 untuk deteksi crossing level 20 / 80 / 50
+  // state internal untuk deteksi sinyal
   var lastRsiM1 = null, prevRsiM1 = null;
   var lastRsiM5 = null;
-  var armSell = false; // RSI M1 sudah sentuh <=20, menunggu naik ke >=50
-  var armBuy = false;  // RSI M1 sudah sentuh >=80, menunggu turun ke <=50
+  var armSell = false; // sudah sentuh level bawah, menunggu naik ke tengah
+  var armBuy = false;  // sudah sentuh level atas, menunggu turun ke tengah
 
   var elAlerts = document.getElementById('alerts');
   var elLog = document.getElementById('log');
@@ -596,21 +564,18 @@
     var closesM5 = M5.map(function(k){ return k.c; }).concat(curM5 ? [curM5.c] : []);
     var rsiM5 = computeRSI(closesM5, RSI_PERIOD);
 
-    // --- logika arming ---
-    // SELL: RSI M1 pernah sentuh <=20 -> armSell = true
+    // --- arming ---
     if (rsiM1 !== null && rsiM1 <= 20) armSell = true;
-    // BUY: RSI M1 pernah sentuh >=80 -> armBuy = true
     if (rsiM1 !== null && rsiM1 >= 80) armBuy = true;
 
     // --- trigger SELL ---
-    // syarat: RSI M5 < 50, armSell aktif, dan RSI M1 naik menyentuh 50
     if (armSell && rsiM5 !== null && rsiM5 < 50 && rsiM1 !== null && prevRsiM1 !== null) {
       if (prevRsiM1 < 50 && rsiM1 >= 50) {
         triggerSignal(price, 'sell');
         armSell = false;
       }
     }
-    // trigger BUY
+    // --- trigger BUY ---
     if (armBuy && rsiM5 !== null && rsiM5 > 50 && rsiM1 !== null && prevRsiM1 !== null) {
       if (prevRsiM1 > 50 && rsiM1 <= 50) {
         triggerSignal(price, 'buy');
@@ -618,697 +583,9 @@
       }
     }
 
-    // reset arming kalau kondisi sudah tidak relevan (opsional, biar tidak nyangkut)
+    // reset arming kalau kondisi sudah tidak relevan
     if (rsiM5 !== null && rsiM5 >= 50 && armSell && rsiM1 !== null && rsiM1 > 80) armSell = false;
     if (rsiM5 !== null && rsiM5 <= 50 && armBuy && rsiM1 !== null && rsiM1 < 20) armBuy = false;
-
-    prevRsiM1 = rsiM1;
-    lastRsiM1 = rsiM1;
-    lastRsiM5 = rsiM5;
-  }
-
-  function updateCandles(ts, p){
-    var b1 = bucketStart(ts, 1);
-    if (curM1Bucket !== b1) {
-      if (curM1) { M1.push(curM1); if (M1.length > 300) M1.shift(); onM1Close(); }
-      curM1Bucket = b1;
-      curM1 = { t: b1, o: p, h: p, l: p, c: p };
-    } else if (curM1) {
-      curM1.h = Math.max(curM1.h, p);
-      curM1.l = Math.min(curM1.l, p);
-      curM1.c = p;
-    }
-
-    var b5 = bucketStart(ts, 5);
-    if (curM5Bucket !== b5) {
-      if (curM5) { M5.push(curM5); if (M5.length > 200) M5.shift(); }
-      curM5Bucket = b5;
-      curM5 = { t: b5, o: p, h: p, l: p, c: p };
-    } else if (curM5) {
-      curM5.h = Math.max(curM5.h, p);
-      curM5.l = Math.min(curM5.l, p);
-      curM5.c = p;
-    }
-  }
-
-  function step(){
-    fetch(API_URL, { cache: 'no-store' })
-      .then(function(res){
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(data){
-        var newPrice = Math.round(Number(data.price) * 100) / 100;
-        if (!isFinite(newPrice)) throw new Error('harga tidak valid');
-        setStatus(true, 'live');
-        var now = Date.now();
-        if (price === null) {
-          price = newPrice;
-          prevPrice = newPrice;
-          history.push(newPrice);
-          updateCandles(now, newPrice);
-          render();
-          return;
-        }
-        prevPrice = price;
-        price = newPrice;
-        history.push(price);
-        if (history.length > maxHistory) history.shift();
-        updateCandles(now, price);
-        render();
-      })
-      .catch(function(err){
-        setStatus(false, 'gagal memuat (' + err.message + ') — coba lagi');
-      });
-  }
-
-  function setStatus(ok,    background: var(--bg);
-    color: var(--text);
-    font-family: 'Space Grotesk', sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  body {
-    background-image:
-      radial-gradient(circle at 15% 0%, rgba(201,162,74,0.06), transparent 45%),
-      radial-gradient(circle at 85% 100%, rgba(61,165,255,0.05), transparent 45%);
-  }
-  .mono { font-family: 'IBM Plex Mono', monospace; }
-
-  .wrap {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 18px 16px 40px;
-  }
-
-  header.top {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  header.top h1 {
-    font-size: 17px;
-    font-weight: 600;
-    margin: 0;
-    letter-spacing: 0.2px;
-  }
-  header.top .pair {
-    color: var(--gold);
-  }
-  header.top .status {
-    font-size: 11px;
-    color: var(--text-dim);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 6px var(--green);
-  }
-  .dot.paused { background: var(--text-faint); box-shadow: none; }
-
-  /* price block */
-  .price-block {
-    padding: 22px 0 18px;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .price-main {
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 600;
-    font-size: clamp(38px, 11vw, 54px);
-    line-height: 1;
-    letter-spacing: -0.5px;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .price-main .change {
-    font-size: 15px;
-    font-weight: 500;
-  }
-  .change.up { color: var(--green); }
-  .change.down { color: var(--red); }
-  .price-sub {
-    font-size: 11px;
-    color: var(--text-dim);
-    text-align: right;
-    line-height: 1.6;
-  }
-  .price-sub b { color: var(--text); font-weight: 500; }
-
-  /* lampu indikator */
-  .lamp-card {
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 26px 16px 22px;
-    display: flex;
-    justify-content: center;
-    gap: clamp(22px, 8vw, 48px);
-  }
-  .lamp {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-  }
-  .lamp .bulb {
-    width: clamp(52px, 14vw, 68px);
-    height: clamp(52px, 14vw, 68px);
-    border-radius: 50%;
-    background: #171b22;
-    border: 2px solid var(--line);
-    box-shadow: inset 0 3px 8px rgba(0,0,0,0.5);
-    transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-  }
-  .lamp .lbl {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10.5px;
-    letter-spacing: 0.5px;
-    color: var(--text-faint);
-    transition: color 0.25s ease;
-  }
-  .lamp.on.sell .bulb {
-    background: radial-gradient(circle at 35% 30%, #ff8a8a, var(--red) 55%, #8a1f1f 100%);
-    border-color: var(--red);
-    box-shadow: 0 0 16px 4px var(--red-glow), 0 0 46px 14px rgba(255,77,77,0.35), inset 0 2px 6px rgba(255,255,255,0.35);
-    animation: lampPulseRed 0.6s ease-in-out infinite;
-  }
-  .lamp.on.sell .lbl { color: var(--red); }
-  .lamp.on.buy .bulb {
-    background: radial-gradient(circle at 35% 30%, #a7d4ff, var(--blue) 55%, #124a82 100%);
-    border-color: var(--blue);
-    box-shadow: 0 0 16px 4px var(--blue-glow), 0 0 46px 14px rgba(61,165,255,0.35), inset 0 2px 6px rgba(255,255,255,0.35);
-    animation: lampPulseBlue 1.1s ease-in-out infinite;
-  }
-  .lamp.on.buy .lbl { color: var(--blue); }
-  .lamp.on.idle .bulb {
-    background: radial-gradient(circle at 35% 30%, #f3dfa0, var(--gold) 55%, #6b501c 100%);
-    border-color: var(--gold);
-    box-shadow: 0 0 12px 3px var(--gold-soft);
-    animation: lampBreathe 2.4s ease-in-out infinite;
-  }
-  .lamp.on.idle .lbl { color: var(--gold); }
-  @keyframes lampPulseRed {
-    0%, 100% { filter: brightness(1); }
-    50% { filter: brightness(1.35); }
-  }
-  @keyframes lampPulseBlue {
-    0%, 100% { filter: brightness(1); }
-    50% { filter: brightness(1.3); }
-  }
-  @keyframes lampBreathe {
-    0%, 100% { filter: brightness(0.85); }
-    50% { filter: brightness(1.15); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .lamp.on .bulb { animation: none; }
-  }
-
-  /* indikator persentase siap jual / siap beli */
-  .ps-card {
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 14px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 10px;
-  }
-  .ps-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .ps-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10.5px;
-    letter-spacing: 0.4px;
-    width: 64px;
-    flex: none;
-    color: var(--text-dim);
-  }
-  .ps-track {
-    flex: 1;
-    height: 8px;
-    border-radius: 5px;
-    background: #171b22;
-    border: 1px solid var(--line);
-    overflow: hidden;
-  }
-  .ps-fill {
-    height: 100%;
-    width: 0%;
-    border-radius: 5px;
-    transition: width 0.35s ease;
-  }
-  .ps-fill.sell { background: linear-gradient(90deg, #7a1f1f, var(--red)); }
-  .ps-fill.buy { background: linear-gradient(90deg, #123f6e, var(--blue)); }
-  .ps-fill.hot.sell { box-shadow: 0 0 10px 2px var(--red-glow); animation: psHotRed 0.6s ease-in-out infinite; }
-  .ps-fill.hot.buy { box-shadow: 0 0 10px 2px var(--blue-glow); animation: psHotBlue 0.6s ease-in-out infinite; }
-  @keyframes psHotRed { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.4); } }
-  @keyframes psHotBlue { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
-  .ps-pct {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11.5px;
-    font-weight: 600;
-    width: 38px;
-    text-align: right;
-    flex: none;
-  }
-  .ps-pct.sell { color: var(--red); }
-  .ps-pct.buy { color: var(--blue); }
-  @media (prefers-reduced-motion: reduce) {
-    .ps-fill.hot { animation: none; }
-  }
-
-  /* active alerts overlay */
-  .alerts {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 14px;
-  }
-  .alert-card {
-    border-radius: var(--radius);
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    border: 1px solid;
-    position: relative;
-    overflow: hidden;
-  }
-  .alert-card .info { display: flex; flex-direction: column; gap: 2px; }
-  .alert-card .label {
-    font-size: 10.5px;
-    letter-spacing: 0.3px;
-    color: var(--text-dim);
-  }
-  .alert-card .level {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 19px;
-    font-weight: 600;
-  }
-  .alert-card .timer {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    color: var(--text-dim);
-    min-width: 34px;
-    text-align: right;
-  }
-  .alert-card .metrics {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-  }
-  .alert-card .pips {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .alert-card .pips.pos { color: var(--green); }
-  .alert-card .pips.neg { color: var(--red); }
-  .alert-card .pips.flat { color: var(--text-dim); }
-  .alert-card .bar {
-    position: absolute;
-    left: 0; bottom: 0;
-    height: 2px;
-    background: currentColor;
-    opacity: 0.8;
-  }
-
-  .alert-card.support {
-    background: rgba(61,165,255,0.10);
-    border-color: rgba(61,165,255,0.4);
-    color: var(--blue);
-    animation: blinkBlue 1s ease-in-out infinite;
-  }
-  .alert-card.resistance {
-    background: rgba(255,77,77,0.10);
-    border-color: rgba(255,77,77,0.4);
-    color: var(--red);
-    animation: blinkRed 0.5s ease-in-out infinite;
-  }
-  @keyframes blinkBlue {
-    0%, 100% { background: rgba(61,165,255,0.10); box-shadow: 0 0 0 rgba(0,0,0,0); }
-    50% { background: rgba(61,165,255,0.32); box-shadow: 0 0 18px var(--blue-glow); }
-  }
-  @keyframes blinkRed {
-    0%, 100% { background: rgba(255,77,77,0.10); box-shadow: 0 0 0 rgba(0,0,0,0); }
-    50% { background: rgba(255,77,77,0.38); box-shadow: 0 0 18px var(--red-glow); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .alert-card.support, .alert-card.resistance { animation: none; }
-  }
-
-  .empty-alerts {
-    font-size: 12px;
-    color: var(--text-faint);
-    padding: 14px 2px;
-    border: 1px dashed var(--line);
-    border-radius: var(--radius);
-    text-align: center;
-  }
-
-  /* controls */
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 18px;
-    flex-wrap: wrap;
-  }
-  button {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    background: var(--bg-panel-raised);
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 9px 16px;
-    cursor: pointer;
-    transition: border-color 0.15s ease, color 0.15s ease;
-  }
-  button:hover { border-color: var(--gold-soft); color: var(--gold); }
-  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-  button.primary { border-color: var(--gold-soft); color: var(--gold); }
-  .speed-group {
-    display: flex; gap: 4px; margin-left: auto;
-    font-size: 11px; color: var(--text-dim);
-    align-items: center;
-  }
-  select {
-    background: var(--bg-panel-raised);
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    padding: 7px 8px;
-  }
-
-  /* log */
-  .log-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-top: 28px;
-    margin-bottom: 8px;
-  }
-  .log-head h2 {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    color: var(--text-dim);
-    margin: 0;
-  }
-  .log-head button {
-    padding: 4px 10px;
-    font-size: 11px;
-  }
-  .log {
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .log-row {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 9px 12px;
-    font-size: 12px;
-    border-bottom: 1px solid var(--line-soft);
-  }
-  .log-row .line1 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .log-row .line2 {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-  .log-row:last-child { border-bottom: none; }
-  .log-row .t { color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
-  .log-row .lvl { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; }
-  .log-row .kind { font-size: 10.5px; color: var(--text-dim); }
-  .log-row .pips {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12.5px;
-    font-weight: 600;
-  }
-  .log-row .pips.pos { color: var(--green); }
-  .log-row .pips.neg { color: var(--red); }
-  .log-row .pips.flat { color: var(--text-faint); }
-  .log-row .tag {
-    font-size: 9.5px;
-    padding: 2px 6px;
-    border-radius: 2px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
-  }
-  .tag.sup { color: var(--blue); background: rgba(61,165,255,0.12); }
-  .tag.res { color: var(--red); background: rgba(255,77,77,0.12); }
-  .log-empty {
-    padding: 20px 12px;
-    text-align: center;
-    color: var(--text-faint);
-    font-size: 12px;
-  }
-
-  footer.note {
-    margin-top: 24px;
-    font-size: 11px;
-    line-height: 1.6;
-    color: var(--text-faint);
-    border-top: 1px solid var(--line);
-    padding-top: 14px;
-  }
-  footer.note b { color: var(--text-dim); }
-</style>
-</head>
-<body>
-<div class="wrap">
-
-  <header class="top">
-    <h1><span class="pair">XAU/USD</span> — DIKA FX</h1>
-    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">berjalan</span></div>
-  </header>
-
-  <div class="lamp-card">
-    <div class="lamp sell" id="lampSell">
-      <div class="bulb"></div>
-      <span class="lbl">SELL</span>
-    </div>
-    <div class="lamp idle on" id="lampIdle">
-      <div class="bulb"></div>
-      <span class="lbl">NETRAL</span>
-    </div>
-    <div class="lamp buy" id="lampBuy">
-      <div class="bulb"></div>
-      <span class="lbl">BUY</span>
-    </div>
-  </div>
-
-  <div class="ps-card">
-    <div class="ps-row">
-      <span class="ps-label">SIGNAL SELL</span>
-      <div class="ps-track"><div class="ps-fill" id="psSellFill"></div></div>
-      <span class="ps-pct" id="psSellPct">–</span>
-    </div>
-    <div class="ps-row">
-      <span class="ps-label">SIGNAL BUY</span>
-      <div class="ps-track"><div class="ps-fill" id="psBuyFill"></div></div>
-      <span class="ps-pct" id="psBuyPct">–</span>
-    </div>
-  </div>
-
-  <div class="alerts" id="alerts">
-    <div class="empty-alerts">Belum ada sinyal aktif — memantau pergerakan pasar</div>
-  </div>
-
-  <div class="controls">
-    <button class="primary" id="toggleBtn">Jeda</button>
-    <button id="resetBtn">Reset</button>
-    <div class="speed-group">refresh · 1 detik</div>
-  </div>
-
-  <div class="log-head">
-    <h2>RIWAYAT SINYAL</h2>
-    <button id="clearLogBtn">Bersihkan</button>
-  </div>
-  <div class="log" id="log">
-    <div class="log-empty">Sinyal yang terpicu akan muncul di sini</div>
-  </div>
-
-
-</div>
-
-<script>
-(function(){
-  "use strict";
-
-  // ---------- state ----------
-  var price = null;
-  var prevPrice = null;
-  var history = [];
-  var running = true;
-  var tickMs = 1000;
-  var timer = null;
-  var API_URL = 'https://api.gold-api.com/price/XAU'; // gratis, tanpa API key
-  var activeAlerts = {}; // id -> {id, level, type, expiresAt, duration, startedAt}
-  var logEntries = []; // newest first
-  var maxHistory = 140;
-  var PIP_SIZE = 0.1; // 1 pip = pergerakan harga 0.1 (konvensi umum XAU/USD di banyak broker)
-  var signalCounter = 0;
-
-  // parameter indikator
-  var RSI_PERIOD = 5;   // RSI(5)
-  var ZZ_DEVIATION = 1; // ZigZag deviasi minimum (%) antar swing
-  var ZZ_DEPTH = 5;     // ZigZag jumlah candle minimum antar swing
-  // catatan: "backstep 3" pada ZigZag MT4 dipakai untuk menjaga jarak antar pivot;
-  // di sini didekati lewat ZZ_DEPTH agar pivot tidak terlalu rapat.
-
-  // candle M1 & M5 dibangun dari harga live (gold-api.com tidak menyediakan OHLC historis)
-  var M1 = [], M5 = [];
-  var curM1 = null, curM1Bucket = null;
-  var curM5 = null, curM5Bucket = null;
-
-  var zigzag = [];          // {idx, price, type:'high'|'low'}
-  var zzTrend = 0;          // 0 belum ada, 1 cari high, -1 cari low
-  var zzExtremePrice = null, zzExtremeIdx = null;
-  var pendingSell = null;   // {level} — menunggu RSI M1 balik ke 50
-  var pendingBuy = null;
-  var prevRsiM1 = null;
-  var lastRsiM1 = null, lastRsiM5 = null;
-
-  var elAlerts = document.getElementById('alerts');
-  var elLog = document.getElementById('log');
-  var lampSell = document.getElementById('lampSell');
-  var lampIdle = document.getElementById('lampIdle');
-  var lampBuy = document.getElementById('lampBuy');
-  var psSellFill = document.getElementById('psSellFill');
-  var psSellPct = document.getElementById('psSellPct');
-  var psBuyFill = document.getElementById('psBuyFill');
-  var psBuyPct = document.getElementById('psBuyPct');
-  var elToggle = document.getElementById('toggleBtn');
-  var elReset = document.getElementById('resetBtn');
-  var elClearLog = document.getElementById('clearLogBtn');
-  var elStatusDot = document.getElementById('statusDot');
-  var elStatusText = document.getElementById('statusText');
-
-  function fmt(n){ return n.toFixed(2); }
-
-  function bucketStart(ms, minutes){
-    var size = minutes * 60000;
-    return Math.floor(ms / size) * size;
-  }
-
-  function computeRSI(closes, period){
-    if (closes.length < period + 1) return null;
-    var start = closes.length - period - 1;
-    var gains = 0, losses = 0;
-    for (var i = start + 1; i < closes.length; i++) {
-      var diff = closes[i] - closes[i - 1];
-      if (diff >= 0) gains += diff; else losses += -diff;
-    }
-    var avgGain = gains / period, avgLoss = losses / period;
-    if (avgLoss === 0) return 100;
-    var rs = avgGain / avgLoss;
-    return 100 - (100 / (1 + rs));
-  }
-
-  function lastZZ(type){
-    for (var i = zigzag.length - 1; i >= 0; i--) {
-      if (zigzag[i].type === type) return zigzag[i];
-    }
-    return null;
-  }
-
-  function updateZigZag(){
-    var n = M1.length;
-    if (n < 2) return;
-    var c = M1[n - 1];
-    if (zzTrend === 0) {
-      zzTrend = 1;
-      zzExtremePrice = c.h;
-      zzExtremeIdx = n - 1;
-      return;
-    }
-    if (zzTrend === 1) { // sedang mencari puncak (high)
-      if (c.h >= zzExtremePrice) {
-        zzExtremePrice = c.h; zzExtremeIdx = n - 1;
-      } else {
-        var devDown = ((zzExtremePrice - c.l) / zzExtremePrice) * 100;
-        if (devDown >= ZZ_DEVIATION && (n - 1 - zzExtremeIdx) >= ZZ_DEPTH) {
-          zigzag.push({ idx: zzExtremeIdx, price: zzExtremePrice, type: 'high' });
-          zzTrend = -1;
-          zzExtremePrice = c.l; zzExtremeIdx = n - 1;
-        }
-      }
-    } else { // sedang mencari lembah (low)
-      if (c.l <= zzExtremePrice) {
-        zzExtremePrice = c.l; zzExtremeIdx = n - 1;
-      } else {
-        var devUp = ((c.h - zzExtremePrice) / zzExtremePrice) * 100;
-        if (devUp >= ZZ_DEVIATION && (n - 1 - zzExtremeIdx) >= ZZ_DEPTH) {
-          zigzag.push({ idx: zzExtremeIdx, price: zzExtremePrice, type: 'low' });
-          zzTrend = 1;
-          zzExtremePrice = c.h; zzExtremeIdx = n - 1;
-        }
-      }
-    }
-    if (zigzag.length > 60) zigzag.shift();
-  }
-
-  function onM1Close(){
-    updateZigZag();
-
-    var closesM1 = M1.map(function(k){ return k.c; });
-    var rsiM1 = computeRSI(closesM1, RSI_PERIOD);
-    var closesM5 = M5.map(function(k){ return k.c; }).concat(curM5 ? [curM5.c] : []);
-    var rsiM5 = computeRSI(closesM5, RSI_PERIOD);
-
-    var lastCandle = M1[M1.length - 1];
-    var lastLow = lastZZ('low');
-    var lastHigh = lastZZ('high');
-
-    // deteksi break 1 candle body M1 terhadap pivot ZigZag
-    if (!pendingSell && lastLow && lastCandle.o < lastLow.price && lastCandle.c < lastLow.price) {
-      pendingSell = { level: lastLow.price };
-    }
-    if (!pendingBuy && lastHigh && lastCandle.o > lastHigh.price && lastCandle.c > lastHigh.price) {
-      pendingBuy = { level: lastHigh.price };
-    }
-    // batalkan setup kalau struktur ZigZag sudah berbalik sebelum RSI konfirmasi
-    if (pendingSell && lastHigh && lastLow && lastHigh.idx > lastLow.idx) pendingSell = null;
-    if (pendingBuy && lastLow && lastHigh && lastLow.idx > lastHigh.idx) pendingBuy = null;
-
-    // konfirmasi: RSI M1 balik ke level 50 + syarat RSI M5
-    if (pendingSell && prevRsiM1 !== null && rsiM1 !== null && prevRsiM1 < 50 && rsiM1 >= 50 && rsiM5 !== null && rsiM5 < 50) {
-      triggerSignal(pendingSell.level, 'sell');
-      pendingSell = null;
-    }
-    if (pendingBuy && prevRsiM1 !== null && rsiM1 !== null && prevRsiM1 > 50 && rsiM1 <= 50 && rsiM5 !== null && rsiM5 > 50) {
-      triggerSignal(pendingBuy.level, 'buy');
-      pendingBuy = null;
-    }
 
     prevRsiM1 = rsiM1;
     lastRsiM1 = rsiM1;
@@ -1391,6 +668,7 @@
   }
 
   function triggerSignal(level, type){
+    if (level === null) return;
     var now = Date.now();
     var duration = 20000;
     signalCounter++;
@@ -1408,7 +686,7 @@
       time: new Date(),
       level: level,
       type: type,
-      pips: null // diisi saat sinyal berakhir (20 detik selesai)
+      pips: null
     });
     if (logEntries.length > 60) logEntries.pop();
     renderLog();
@@ -1429,11 +707,14 @@
     fillEl.classList.toggle('sell', !bullish);
     pctEl.classList.toggle('buy', bullish);
     pctEl.classList.toggle('sell', !bullish);
-    fillEl.classList.toggle('hot', v >= 70 || v <= 30);
+    fillEl.classList.toggle('hot', v >= 80 || v <= 20);
   }
 
-  function updateRsiGauges(){
-    setGauge(psSellFill, psSellPct, lastRsiM1);
+  function updateGauges(){
+    // gauge SELL ditampilkan sebagai kebalikan (semakin rendah makin siap sell)
+    // agar bar tetap terisi penuh ketika kondisi siap jual
+    var sellVal = lastRsiM1 === null ? null : (100 - lastRsiM1);
+    setGauge(psSellFill, psSellPct, sellVal);
     setGauge(psBuyFill, psBuyPct, lastRsiM5);
   }
 
@@ -1447,7 +728,6 @@
     var now = Date.now();
     var keys = Object.keys(activeAlerts);
     var logChanged = false;
-    // purge expired -> catat hasil pips final ke riwayat sebelum dihapus
     keys.forEach(function(k){
       var a = activeAlerts[k];
       if (a.expiresAt <= now) {
@@ -1482,7 +762,7 @@
         '<div class="alert-card ' + (isSup ? 'support' : 'resistance') + '">' +
           '<div class="info">' +
             '<span class="label">' + (isSup ? 'BUY NOW' : 'SELL NOW') + '</span>' +
-            '<span class="level mono">' + a.level.toFixed(0) + '.00</span>' +
+            '<span class="level mono">' + a.level.toFixed(2) + '</span>' +
           '</div>' +
           '<div class="metrics">' +
             '<span class="timer">' + remainLabel + '</span>' +
@@ -1515,6 +795,7 @@
             '<span class="tag ' + (isSup ? 'sup' : 'res') + '">20 DETIK</span>' +
           '</div>' +
           '<div class="line2">' +
+            '<span class="kind mono">@ ' + e.level.toFixed(2) + '</span>' +
             pipsHtml +
           '</div>' +
         '</div>'
@@ -1525,7 +806,7 @@
 
 
   function render(){
-    updateRsiGauges();
+    updateGauges();
     renderAlerts();
   }
 
@@ -1563,12 +844,11 @@
     M1 = []; M5 = [];
     curM1 = null; curM1Bucket = null;
     curM5 = null; curM5Bucket = null;
-    zigzag = []; zzTrend = 0; zzExtremePrice = null; zzExtremeIdx = null;
-    pendingSell = null; pendingBuy = null;
-    prevRsiM1 = null; lastRsiM1 = null; lastRsiM5 = null;
+    lastRsiM1 = null; prevRsiM1 = null; lastRsiM5 = null;
+    armSell = false; armBuy = false;
     renderLog();
     renderAlerts();
-    updateRsiGauges();
+    updateGauges();
     step();
   });
   elClearLog.addEventListener('click', function(){
