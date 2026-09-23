@@ -207,9 +207,8 @@
     letter-spacing: 0.4px;
     width: 64px;
     flex: none;
+    color: var(--text-dim);
   }
-  .ps-label.sell { color: var(--red); }
-  .ps-label.buy { color: var(--blue); }
   .ps-track {
     flex: 1;
     height: 8px;
@@ -480,35 +479,26 @@
   </div>
 
   <div class="ps-card">
-    <div class="ps-row" id="psSellRow">
-      <span class="ps-label sell">SIAP JUAL</span>
-      <div class="ps-track"><div class="ps-fill sell" id="psSellFill"></div></div>
-      <span class="ps-pct sell" id="psSellPct">0%</span>
+    <div class="ps-row">
+      <span class="ps-label">SIGNAL SELL</span>
+      <div class="ps-track"><div class="ps-fill" id="psSellFill"></div></div>
+      <span class="ps-pct" id="psSellPct">–</span>
     </div>
-    <div class="ps-row" id="psBuyRow">
-      <span class="ps-label buy">SIAP BELI</span>
-      <div class="ps-track"><div class="ps-fill buy" id="psBuyFill"></div></div>
-      <span class="ps-pct buy" id="psBuyPct">0%</span>
+    <div class="ps-row">
+      <span class="ps-label">SIGNAL BUY</span>
+      <div class="ps-track"><div class="ps-fill" id="psBuyFill"></div></div>
+      <span class="ps-pct" id="psBuyPct">–</span>
     </div>
   </div>
 
   <div class="alerts" id="alerts">
-    <div class="empty-alerts">Belum ada sinyal aktif — menunggu harga menyentuh level x5</div>
+    <div class="empty-alerts">Belum ada sinyal aktif — memantau pergerakan pasar</div>
   </div>
 
   <div class="controls">
     <button class="primary" id="toggleBtn">Jeda</button>
     <button id="resetBtn">Reset</button>
-    <div class="speed-group">
-      <label for="speedSelect">refresh</label>
-      <select id="speedSelect">
-        <option value="1000" selected>1 detik</option>
-        <option value="5000">5 detik</option>
-        <option value="10000">10 detik</option>
-        <option value="20000">20 detik</option>
-        <option value="30000">30 detik</option>
-      </select>
-    </div>
+    <div class="speed-group">refresh · 1 detik</div>
   </div>
 
   <div class="log-head">
@@ -534,12 +524,31 @@
   var tickMs = 1000;
   var timer = null;
   var API_URL = 'https://api.gold-api.com/price/XAU'; // gratis, tanpa API key
-  var activeAlerts = {}; // level -> {type, expiresAt, duration, startedAt, el}
+  var activeAlerts = {}; // id -> {id, level, type, expiresAt, duration, startedAt}
   var logEntries = []; // newest first
   var maxHistory = 140;
-  var armed = true; // harus menyentuh level genap (…10,20,30,40) dulu sebelum sinyal baru boleh muncul
   var PIP_SIZE = 0.1; // 1 pip = pergerakan harga 0.1 (konvensi umum XAU/USD di banyak broker)
   var signalCounter = 0;
+
+  // parameter indikator
+  var RSI_PERIOD = 5;   // RSI(5)
+  var ZZ_DEVIATION = 1; // ZigZag deviasi minimum (%) antar swing
+  var ZZ_DEPTH = 5;     // ZigZag jumlah candle minimum antar swing
+  // catatan: "backstep 3" pada ZigZag MT4 dipakai untuk menjaga jarak antar pivot;
+  // di sini didekati lewat ZZ_DEPTH agar pivot tidak terlalu rapat.
+
+  // candle M1 & M5 dibangun dari harga live (gold-api.com tidak menyediakan OHLC historis)
+  var M1 = [], M5 = [];
+  var curM1 = null, curM1Bucket = null;
+  var curM5 = null, curM5Bucket = null;
+
+  var zigzag = [];          // {idx, price, type:'high'|'low'}
+  var zzTrend = 0;          // 0 belum ada, 1 cari high, -1 cari low
+  var zzExtremePrice = null, zzExtremeIdx = null;
+  var pendingSell = null;   // {level} — menunggu RSI M1 balik ke 50
+  var pendingBuy = null;
+  var prevRsiM1 = null;
+  var lastRsiM1 = null, lastRsiM5 = null;
 
   var elAlerts = document.getElementById('alerts');
   var elLog = document.getElementById('log');
@@ -552,25 +561,134 @@
   var psBuyPct = document.getElementById('psBuyPct');
   var elToggle = document.getElementById('toggleBtn');
   var elReset = document.getElementById('resetBtn');
-  var elSpeed = document.getElementById('speedSelect');
   var elClearLog = document.getElementById('clearLogBtn');
   var elStatusDot = document.getElementById('statusDot');
   var elStatusText = document.getElementById('statusText');
 
   function fmt(n){ return n.toFixed(2); }
 
-  function isSignalLevel(l){
-    // odd multiple of 5 == ends in 5 (mod 10 === 5)
-    var m = Math.round(l) % 10;
-    if (m < 0) m += 10;
-    return m === 5;
+  function bucketStart(ms, minutes){
+    var size = minutes * 60000;
+    return Math.floor(ms / size) * size;
   }
 
-  function isResetLevel(l){
-    // kelipatan genap dari 10 (…10, 20, 30, 40 dst — berakhiran 0)
-    var m = Math.round(l) % 10;
-    if (m < 0) m += 10;
-    return m === 0;
+  function computeRSI(closes, period){
+    if (closes.length < period + 1) return null;
+    var start = closes.length - period - 1;
+    var gains = 0, losses = 0;
+    for (var i = start + 1; i < closes.length; i++) {
+      var diff = closes[i] - closes[i - 1];
+      if (diff >= 0) gains += diff; else losses += -diff;
+    }
+    var avgGain = gains / period, avgLoss = losses / period;
+    if (avgLoss === 0) return 100;
+    var rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  function lastZZ(type){
+    for (var i = zigzag.length - 1; i >= 0; i--) {
+      if (zigzag[i].type === type) return zigzag[i];
+    }
+    return null;
+  }
+
+  function updateZigZag(){
+    var n = M1.length;
+    if (n < 2) return;
+    var c = M1[n - 1];
+    if (zzTrend === 0) {
+      zzTrend = 1;
+      zzExtremePrice = c.h;
+      zzExtremeIdx = n - 1;
+      return;
+    }
+    if (zzTrend === 1) { // sedang mencari puncak (high)
+      if (c.h >= zzExtremePrice) {
+        zzExtremePrice = c.h; zzExtremeIdx = n - 1;
+      } else {
+        var devDown = ((zzExtremePrice - c.l) / zzExtremePrice) * 100;
+        if (devDown >= ZZ_DEVIATION && (n - 1 - zzExtremeIdx) >= ZZ_DEPTH) {
+          zigzag.push({ idx: zzExtremeIdx, price: zzExtremePrice, type: 'high' });
+          zzTrend = -1;
+          zzExtremePrice = c.l; zzExtremeIdx = n - 1;
+        }
+      }
+    } else { // sedang mencari lembah (low)
+      if (c.l <= zzExtremePrice) {
+        zzExtremePrice = c.l; zzExtremeIdx = n - 1;
+      } else {
+        var devUp = ((c.h - zzExtremePrice) / zzExtremePrice) * 100;
+        if (devUp >= ZZ_DEVIATION && (n - 1 - zzExtremeIdx) >= ZZ_DEPTH) {
+          zigzag.push({ idx: zzExtremeIdx, price: zzExtremePrice, type: 'low' });
+          zzTrend = 1;
+          zzExtremePrice = c.h; zzExtremeIdx = n - 1;
+        }
+      }
+    }
+    if (zigzag.length > 60) zigzag.shift();
+  }
+
+  function onM1Close(){
+    updateZigZag();
+
+    var closesM1 = M1.map(function(k){ return k.c; });
+    var rsiM1 = computeRSI(closesM1, RSI_PERIOD);
+    var closesM5 = M5.map(function(k){ return k.c; }).concat(curM5 ? [curM5.c] : []);
+    var rsiM5 = computeRSI(closesM5, RSI_PERIOD);
+
+    var lastCandle = M1[M1.length - 1];
+    var lastLow = lastZZ('low');
+    var lastHigh = lastZZ('high');
+
+    // deteksi break 1 candle body M1 terhadap pivot ZigZag
+    if (!pendingSell && lastLow && lastCandle.o < lastLow.price && lastCandle.c < lastLow.price) {
+      pendingSell = { level: lastLow.price };
+    }
+    if (!pendingBuy && lastHigh && lastCandle.o > lastHigh.price && lastCandle.c > lastHigh.price) {
+      pendingBuy = { level: lastHigh.price };
+    }
+    // batalkan setup kalau struktur ZigZag sudah berbalik sebelum RSI konfirmasi
+    if (pendingSell && lastHigh && lastLow && lastHigh.idx > lastLow.idx) pendingSell = null;
+    if (pendingBuy && lastLow && lastHigh && lastLow.idx > lastHigh.idx) pendingBuy = null;
+
+    // konfirmasi: RSI M1 balik ke level 50 + syarat RSI M5
+    if (pendingSell && prevRsiM1 !== null && rsiM1 !== null && prevRsiM1 < 50 && rsiM1 >= 50 && rsiM5 !== null && rsiM5 < 50) {
+      triggerSignal(pendingSell.level, 'sell');
+      pendingSell = null;
+    }
+    if (pendingBuy && prevRsiM1 !== null && rsiM1 !== null && prevRsiM1 > 50 && rsiM1 <= 50 && rsiM5 !== null && rsiM5 > 50) {
+      triggerSignal(pendingBuy.level, 'buy');
+      pendingBuy = null;
+    }
+
+    prevRsiM1 = rsiM1;
+    lastRsiM1 = rsiM1;
+    lastRsiM5 = rsiM5;
+  }
+
+  function updateCandles(ts, p){
+    var b1 = bucketStart(ts, 1);
+    if (curM1Bucket !== b1) {
+      if (curM1) { M1.push(curM1); if (M1.length > 300) M1.shift(); onM1Close(); }
+      curM1Bucket = b1;
+      curM1 = { t: b1, o: p, h: p, l: p, c: p };
+    } else if (curM1) {
+      curM1.h = Math.max(curM1.h, p);
+      curM1.l = Math.min(curM1.l, p);
+      curM1.c = p;
+    }
+
+    var b5 = bucketStart(ts, 5);
+    if (curM5Bucket !== b5) {
+      if (curM5) { M5.push(curM5); if (M5.length > 200) M5.shift(); }
+      curM5Bucket = b5;
+      curM5 = { t: b5, o: p, h: p, l: p, c: p };
+    } else if (curM5) {
+      curM5.h = Math.max(curM5.h, p);
+      curM5.l = Math.min(curM5.l, p);
+      curM5.c = p;
+    }
   }
 
   function step(){
@@ -583,10 +701,12 @@
         var newPrice = Math.round(Number(data.price) * 100) / 100;
         if (!isFinite(newPrice)) throw new Error('harga tidak valid');
         setStatus(true, 'live');
+        var now = Date.now();
         if (price === null) {
           price = newPrice;
           prevPrice = newPrice;
           history.push(newPrice);
+          updateCandles(now, newPrice);
           render();
           return;
         }
@@ -594,7 +714,7 @@
         price = newPrice;
         history.push(price);
         if (history.length > maxHistory) history.shift();
-        checkCrossings(prevPrice, price);
+        updateCandles(now, price);
         render();
       })
       .catch(function(err){
@@ -607,32 +727,8 @@
     elStatusDot.classList.toggle('paused', !ok);
   }
 
-  function checkCrossings(prev, cur){
-    if (prev === cur) return;
-    var up = cur > prev;
-    var lo = Math.min(prev, cur), hi = Math.max(prev, cur);
-    // semua level kelipatan 5 (baik x5 maupun x0) yang terlewati
-    var start = Math.ceil(lo / 5) * 5;
-    var levels = [];
-    for (var lvl = start; lvl <= hi + 0.0001; lvl += 5) {
-      if (lvl < lo - 0.0001) continue;
-      levels.push(Math.round(lvl * 100) / 100);
-    }
-    if (!up) levels.reverse(); // urutkan sesuai arah harga benar-benar menyentuhnya
-
-    for (var i = 0; i < levels.length; i++) {
-      var l = levels[i];
-      if (isResetLevel(l)) {
-        armed = true; // harga sudah menyentuh level genap -> siap untuk sinyal berikutnya
-      } else if (isSignalLevel(l) && armed) {
-        triggerSignal(l, up ? 'resistance' : 'support');
-        armed = false; // kunci sampai menyentuh level genap lagi
-      }
-    }
-  }
-
   function calcPips(entryLevel, type, atPrice){
-    var raw = type === 'support' ? (entryLevel - atPrice) : (atPrice - entryLevel); // disesuaikan dengan label yang dibalik
+    var raw = type === 'buy' ? (atPrice - entryLevel) : (entryLevel - atPrice);
     return Math.round((raw / PIP_SIZE) * 10) / 10;
   }
 
@@ -651,7 +747,7 @@
     var duration = 20000;
     signalCounter++;
     var id = signalCounter;
-    activeAlerts[level.toFixed(0)] = {
+    activeAlerts[id] = {
       id: id, level: level, type: type, startedAt: now, expiresAt: now + duration, duration: duration
     };
     addLogEntry(id, level, type);
@@ -670,27 +766,27 @@
     renderLog();
   }
 
-  function bracketLevels(p){
-    var base = Math.floor(p / 10) * 10;
-    var lower = (base + 5 <= p) ? base + 5 : base - 5;
-    var upper = lower + 10;
-    return { lower: lower, upper: upper };
+  function setGauge(fillEl, pctEl, val){
+    if (val === null || val === undefined) {
+      fillEl.style.width = '0%';
+      pctEl.textContent = '–';
+      fillEl.classList.remove('buy', 'sell', 'hot');
+      return;
+    }
+    var v = Math.max(0, Math.min(100, val));
+    fillEl.style.width = v.toFixed(0) + '%';
+    pctEl.textContent = v.toFixed(0);
+    var bullish = v >= 50;
+    fillEl.classList.toggle('buy', bullish);
+    fillEl.classList.toggle('sell', !bullish);
+    pctEl.classList.toggle('buy', bullish);
+    pctEl.classList.toggle('sell', !bullish);
+    fillEl.classList.toggle('hot', v >= 70 || v <= 30);
   }
 
-  function updatePreSignal(){
-    if (price === null) return;
-    var b = bracketLevels(price);
-    var pctBuy = Math.round(((price - b.lower) / (b.upper - b.lower)) * 100);
-    pctBuy = Math.max(0, Math.min(100, pctBuy));
-    var pctSell = 100 - pctBuy;
-
-    psBuyFill.style.width = pctBuy + '%';
-    psBuyPct.textContent = pctBuy + '%';
-    psBuyFill.classList.toggle('hot', pctBuy >= 80);
-
-    psSellFill.style.width = pctSell + '%';
-    psSellPct.textContent = pctSell + '%';
-    psSellFill.classList.toggle('hot', pctSell >= 80);
+  function updateRsiGauges(){
+    setGauge(psSellFill, psSellPct, lastRsiM1);
+    setGauge(psBuyFill, psBuyPct, lastRsiM5);
   }
 
   function updateLamp(state){
@@ -720,19 +816,19 @@
 
     if (keys.length === 0) {
       updateLamp('idle');
-      elAlerts.innerHTML = '<div class="empty-alerts">Belum ada sinyal aktif — menunggu harga menyentuh level x5</div>';
+      elAlerts.innerHTML = '<div class="empty-alerts">Belum ada sinyal aktif — memantau pergerakan pasar</div>';
       return;
     }
 
     var topType = activeAlerts[keys[0]].type;
-    updateLamp(topType !== 'support' ? 'buy' : 'sell'); // ikuti label yang sudah dibalik
+    updateLamp(topType === 'buy' ? 'buy' : 'sell');
 
     var html = keys.map(function(k){
       var a = activeAlerts[k];
       var remain = Math.max(0, a.expiresAt - now);
       var remainLabel = remain >= 1000 ? Math.ceil(remain/1000) + 's' : Math.ceil(remain/100)/10 + 's';
       var pct = Math.max(0, remain / a.duration) * 100;
-      var isSup = a.type !== 'support'; // label & warna dibalik dari arah sinyal aslinya
+      var isSup = a.type === 'buy';
       var livePips = price !== null ? calcPips(a.level, a.type, price) : 0;
       return (
         '<div class="alert-card ' + (isSup ? 'support' : 'resistance') + '">' +
@@ -760,7 +856,7 @@
       var hh = e.time.getHours().toString().padStart(2,'0');
       var mm = e.time.getMinutes().toString().padStart(2,'0');
       var ss = e.time.getSeconds().toString().padStart(2,'0');
-      var isSup = e.type !== 'support'; // label & warna dibalik dari arah sinyal aslinya
+      var isSup = e.type === 'buy';
       var pipsHtml = e.pips === null
         ? '<span class="pips flat">berjalan…</span>'
         : '<span class="pips ' + pipsClass(e.pips) + '">' + pipsLabel(e.pips) + '</span>';
@@ -781,7 +877,7 @@
 
 
   function render(){
-    updatePreSignal();
+    updateRsiGauges();
     renderAlerts();
   }
 
@@ -816,13 +912,16 @@
     history = [];
     activeAlerts = {};
     logEntries = [];
-    armed = true;
+    M1 = []; M5 = [];
+    curM1 = null; curM1Bucket = null;
+    curM5 = null; curM5Bucket = null;
+    zigzag = []; zzTrend = 0; zzExtremePrice = null; zzExtremeIdx = null;
+    pendingSell = null; pendingBuy = null;
+    prevRsiM1 = null; lastRsiM1 = null; lastRsiM5 = null;
     renderLog();
     renderAlerts();
+    updateRsiGauges();
     step();
-  });
-  elSpeed.addEventListener('change', function(){
-    tickMs = parseInt(elSpeed.value, 10);
   });
   elClearLog.addEventListener('click', function(){
     logEntries = [];
